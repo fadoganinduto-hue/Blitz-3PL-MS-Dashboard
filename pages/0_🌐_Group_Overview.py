@@ -113,21 +113,22 @@ k4.metric("GP Margin %", fmt_pct(cur_margin),
 
 st.divider()
 
-# ── Stacked monthly bars by stream ─────────────────────────────────────────────
+# ── Grouped monthly bars by stream ─────────────────────────────────────────────
 st.subheader("📈 Monthly Revenue (GMV) by Stream")
 fdf_plot = fdf.copy().sort_values(['Year', 'MonthNum'])
 fig = px.bar(
     fdf_plot, x='Period', y='Revenue', color='Stream',
-    barmode='stack',
+    barmode='group',
     color_discrete_map={
-        'Blitz — Delivery':      '#1976D2',
+        'Blitz — Delivery':       '#1976D2',
         'Blitz — Mobile Sellers': '#F57C00',
         'Borzo — 3PL':            '#7B1FA2',
     }
 )
 fig.update_layout(
     template='plotly_white', height=420, yaxis_title='IDR',
-    hovermode='x unified', legend=dict(orientation='h', y=1.08)
+    hovermode='x unified', legend=dict(orientation='h', y=1.08),
+    bargap=0.15, bargroupgap=0.05
 )
 st.plotly_chart(fig, use_container_width=True)
 
