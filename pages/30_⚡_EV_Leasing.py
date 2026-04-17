@@ -10,8 +10,20 @@ import plotly.express as px
 from utils import (
     fmt_idr, fmt_pct, fmt_vol, MONTH_ORDER,
     C_REVENUE, C_COST, C_GP, C_VOLUME,
-    get_ev_optional, get_mobile_optional,
+    get_blitz_mobile_optional,
 )
+
+def _get_ev_data():
+    """Get EV data from session state (loaded from Test EV Rental sheet)."""
+    from utils import _auto_load_from_data_folder  # noqa: may not exist in older deploy
+    try:
+        _auto_load_from_data_folder()
+    except Exception:
+        pass
+    df = st.session_state.get('ev_data')
+    if df is None or (hasattr(df, 'empty') and df.empty):
+        return None
+    return df.copy()
 
 st.set_page_config(page_title="EV Leasing | Blitz", page_icon="⚡", layout="wide")
 st.title("⚡ EV Leasing")
@@ -23,8 +35,8 @@ st.caption(
 )
 
 # ── Load sources ──────────────────────────────────────────────────────────────
-ev_del   = get_ev_optional()     # from Test EV Rental sheet
-mob_raw  = get_mobile_optional() # from Mobile Sellers
+ev_del   = _get_ev_data()             # from Test EV Rental sheet
+mob_raw  = get_blitz_mobile_optional() # from Mobile Sellers
 
 if ev_del is None and mob_raw is None:
     st.warning("⚠️ No EV data loaded. Ask your admin to publish data via the Updater page.")
