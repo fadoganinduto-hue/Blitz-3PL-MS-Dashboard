@@ -6,7 +6,8 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_trend)
+                   pop_pct, pop_label, build_trend,
+                   apply_chart_theme)
 
 st.set_page_config(page_title="Overview | Blitz", page_icon="📊", layout="wide")
 st.title("📊 Overview")
@@ -94,16 +95,17 @@ with tab_pnl:
                 marker_color=C_COST, opacity=0.8)
     fig.add_scatter(x=trend['Label'], y=trend['GP'], mode='lines+markers', name='GP',
                     line=dict(color=C_GP, width=2))
-    fig.update_layout(barmode='group', hovermode='x unified', template='plotly_white',
-                      height=400, legend=dict(orientation='h', y=1.05), yaxis_title='IDR',
+    fig.update_layout(barmode='group', height=400, yaxis_title='IDR',
                       xaxis_tickangle=-45)
-    st.plotly_chart(fig, use_container_width=True)
+    apply_chart_theme(fig)
+    st.plotly_chart(fig, width="stretch")
 
 with tab_vol:
     fig_vol = px.bar(trend, x='Label', y='Volume', color_discrete_sequence=[C_VOLUME],
-                     template='plotly_white', height=360, labels={'Volume': 'Deliveries'})
-    fig_vol.update_layout(hovermode='x unified', xaxis_tickangle=-45)
-    st.plotly_chart(fig_vol, use_container_width=True)
+                     height=360, labels={'Volume': 'Deliveries'})
+    fig_vol.update_layout(xaxis_tickangle=-45)
+    apply_chart_theme(fig_vol)
+    st.plotly_chart(fig_vol, width="stretch")
 
 st.divider()
 
@@ -133,7 +135,7 @@ disp['Volume']   = disp['Volume'].apply(fmt_vol)
 st.dataframe(
     disp[['Label', 'Revenue', 'Rev PoP%', 'Cost', 'GP', 'GP PoP%', 'Margin', 'Volume', 'Vol PoP%']]
     .rename(columns={'Label': 'Period'}),
-    use_container_width=True, hide_index=True
+    width="stretch", hide_index=True
 )
 
 st.divider()
@@ -151,6 +153,7 @@ if others > 0:
                        pd.DataFrame([{'Client Name': 'Others', 'Total Revenue': others}])],
                       ignore_index=True)
 fig_pie = px.pie(top15, values='Total Revenue', names='Client Name', hole=0.4,
-                 template='plotly_white', height=420)
+                 height=420)
 fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-st.plotly_chart(fig_pie, use_container_width=True)
+apply_chart_theme(fig_pie)
+st.plotly_chart(fig_pie, width="stretch")
