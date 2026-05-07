@@ -578,6 +578,33 @@ def render_theme_toggle() -> str:
     return mode
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Reusable column_config helpers — fix sortable formatted columns
+# ─────────────────────────────────────────────────────────────────────────────
+# Pattern: pass numeric values to st.dataframe and use column_config to
+# format the display. Streamlit then sorts numerically (correct), instead of
+# alphabetically on pre-formatted strings (broken — "5,827" sorts before "641"
+# because '5' < '6').
+
+def idr_col(label: str = "Amount"):
+    """Column config for an IDR column. Compact format (1.2M, 23B), sortable."""
+    return st.column_config.NumberColumn(label, format="compact")
+
+
+def vol_col(label: str = "Volume"):
+    """Column config for a volume/count column. Localized integer, sortable."""
+    return st.column_config.NumberColumn(label, format="localized")
+
+
+def pct_col(label: str = "Margin", signed: bool = False):
+    """Column config for a percentage column (value already on a 0–100 scale).
+
+    Set signed=True to always show + or - for delta-style columns.
+    """
+    fmt = "%+.1f%%" if signed else "%.1f%%"
+    return st.column_config.NumberColumn(label, format=fmt)
+
+
 def apply_chart_theme(fig: go.Figure) -> go.Figure:
     """Apply consistent Plotly defaults to any figure.
 

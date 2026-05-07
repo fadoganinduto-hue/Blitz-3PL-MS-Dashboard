@@ -6,7 +6,8 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_trend)
+                   pop_pct, pop_label, build_trend,
+                   apply_chart_theme, idr_col, vol_col, pct_col)
 
 st.set_page_config(page_title="By Location | Blitz", page_icon="🗺️", layout="wide")
 st.title("🗺️ By Location")
@@ -55,19 +56,15 @@ lw_loc = curr_loc.merge(prev_loc, on='Client Location', how='left').fillna(0)
 lw_loc[f'GP {pop} %'] = lw_loc.apply(lambda r: pop_pct(r['GP'], r['GP_prev']), axis=1)
 lw_loc = lw_loc.sort_values('GP', ascending=False)
 
-def fmt_delta(v):
-    if v is None or pd.isna(v):
-        return '—'
-    return f"{'▲' if v > 0 else '▼'} {abs(v):.1f}%"
-
-disp_lw = lw_loc.copy()
-disp_lw['Revenue']       = disp_lw['Revenue'].apply(fmt_idr)
-disp_lw['GP']            = disp_lw['GP'].apply(fmt_idr)
-disp_lw['Volume']        = disp_lw['Volume'].apply(fmt_vol)
-disp_lw[f'GP {pop} %']  = disp_lw[f'GP {pop} %'].apply(fmt_delta)
 st.dataframe(
-    disp_lw[['Client Location', 'Volume', 'Revenue', 'GP', f'GP {pop} %']],
-    use_container_width=True, hide_index=True
+    lw_loc[['Client Location', 'Volume', 'Revenue', 'GP', f'GP {pop} %']],
+    column_config={
+        'Volume':       vol_col('Volume'),
+        'Revenue':      idr_col('Revenue'),
+        'GP':           idr_col('GP'),
+        f'GP {pop} %':  pct_col(f'GP {pop} %', signed=True),
+    },
+    width="stretch", hide_index=True,
 )
 
 st.divider()
@@ -87,22 +84,25 @@ loc_agg = loc_agg.sort_values('GP', ascending=False)
 fig_rank = px.bar(
     loc_agg.sort_values('GP'), x='GP', y='Client Location', orientation='h',
     color='GP', color_continuous_scale=['red', 'yellow', 'green'],
-    template='plotly_white', height=max(350, len(loc_agg) * 28),
+    height=max(350, len(loc_agg) * 28),
     title="Gross Profit by Location (Period)",
-    labels={'GP': 'Gross Profit (IDR)', 'Client Location': ''}
+    labels={'GP': 'Gross Profit (IDR)', 'Client Location': ''},
 )
 fig_rank.add_vline(x=0, line_dash='dash', line_color='grey')
 fig_rank.update_coloraxes(showscale=False)
-st.plotly_chart(fig_rank, use_container_width=True)
+apply_chart_theme(fig_rank)
+st.plotly_chart(fig_rank, width="stretch")
 
-disp_all = loc_agg.copy()
-for col in ['Revenue', 'Cost', 'GP']:
-    disp_all[col] = disp_all[col].apply(fmt_idr)
-disp_all['GP Margin %'] = disp_all['GP Margin %'].apply(fmt_pct)
-disp_all['Volume']      = disp_all['Volume'].apply(fmt_vol)
 st.dataframe(
-    disp_all[['Client Location', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
-    use_container_width=True, hide_index=True
+    loc_agg[['Client Location', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+    column_config={
+        'Volume':      vol_col('Volume'),
+        'Revenue':     idr_col('Revenue'),
+        'Cost':        idr_col('Cost'),
+        'GP':          idr_col('GP'),
+        'GP Margin %': pct_col('GP Margin %', signed=False),
+    },
+    width="stretch", hide_index=True,
 )
 
 st.divider()
@@ -131,25 +131,23 @@ fig_l.add_bar(x=trend_l['Label'], y=trend_l['Cost'],    name='Cost',
               marker_color=C_COST, opacity=0.8)
 fig_l.add_scatter(x=trend_l['Label'], y=trend_l['GP'], mode='lines+markers',
                   name='GP', line=dict(color=C_GP, width=2))
-fig_l.update_layout(barmode='group', hovermode='x unified', template='plotly_white',
-                    height=400, legend=dict(orientation='h', y=1.05), yaxis_title='IDR',
+fig_l.update_layout(barmode='group', height=400, yaxis_title='IDR',
                     xaxis_tickangle=-45, title=f"{sel_loc} — {view_mode} Trend")
-st.plotly_chart(fig_l, use_container_width=True)
+apply_chart_theme(fig_l)
+st.plotly_chart(fig_l, width="stretch")
 
-def fmt_pop_plain(v):
-    if pd.isna(v):
-        return '—'
-    return f"{'▲' if v > 0 else '▼'} {abs(v):.1f}%"
-
-disp_loc = trend_l.copy()
-for col in ['Revenue', 'Cost', 'GP']:
-    disp_loc[col] = disp_loc[col].apply(fmt_idr)
-disp_loc['Volume']    = disp_loc['Volume'].apply(fmt_vol)
-disp_loc['Rev PoP%']  = disp_loc['Revenue PoP%'].apply(fmt_pop_plain)
-disp_loc['GP PoP%']   = disp_loc['GP PoP%'].apply(fmt_pop_plain)
-disp_loc['Vol PoP%']  = disp_loc['Volume PoP%'].apply(fmt_pop_plain)
 st.dataframe(
-    disp_loc[['Label', 'Volume', 'Vol PoP%', 'Revenue', 'Rev PoP%',
-              'Cost', 'GP', 'GP PoP%']],
-    use_container_width=True, hide_index=True
+    trend_l[['Label', 'Volume', 'Volume PoP%', 'Revenue', 'Revenue PoP%',
+             'Cost', 'GP', 'GP PoP%']],
+    column_config={
+        'Label':        st.column_config.TextColumn('Period'),
+        'Volume':       vol_col('Volume'),
+        'Volume PoP%':  pct_col('Vol PoP%', signed=True),
+        'Revenue':      idr_col('Revenue'),
+        'Revenue PoP%': pct_col('Rev PoP%', signed=True),
+        'Cost':         idr_col('Cost'),
+        'GP':           idr_col('GP'),
+        'GP PoP%':      pct_col('GP PoP%', signed=True),
+    },
+    width="stretch", hide_index=True,
 )

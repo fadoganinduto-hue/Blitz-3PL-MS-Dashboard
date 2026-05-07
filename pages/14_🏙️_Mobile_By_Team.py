@@ -3,7 +3,8 @@ import pandas as pd
 import plotly.express as px
 from utils import (require_mobile_data, fmt_idr, fmt_vol,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_mobile_trend)
+                   pop_pct, pop_label, build_mobile_trend,
+                   apply_chart_theme, idr_col, vol_col, pct_col)
 from data_loader import mobile_aggregate
 
 st.set_page_config(page_title="Mobile By Team | Blitz", page_icon="🏙️", layout="wide")
@@ -43,17 +44,23 @@ else:
     merged = agg_curr.copy()
     merged['PoP%'] = None
 
-display = merged.copy()
-n_clients = merged['Blitz Team'].apply(lambda t: len(df_full[df_full['Blitz Team'] == t]['Client Name'].unique()))
-display = display.rename(columns={'Blitz Team': 'Team'})
-display['# Clients'] = n_clients.values
-display['Cups'] = display['Total Cups Sold'].apply(fmt_vol)
-display['Blitz Revenue'] = display['Blitz Revenue'].apply(fmt_idr)
-display['Profit'] = display['Profit Calc'].apply(fmt_idr)
-display['PoP%'] = merged['PoP%'].apply(lambda x: f"▲ {x:.1f}%" if x and x > 0 else f"▼ {abs(x):.1f}%" if x and x < 0 else "—")
+display = merged.rename(columns={'Blitz Team': 'Team', 'Total Cups Sold': 'Cups',
+                                  'Profit Calc': 'Profit'}).copy()
+display['# Clients'] = merged['Blitz Team'].apply(
+    lambda t: df_full[df_full['Blitz Team'] == t]['Client Name'].nunique()
+).values
 
-st.dataframe(display[['Team', '# Clients', 'Cups', 'Blitz Revenue', 'Profit', 'PoP%']].sort_values('Team'),
-             use_container_width=True, hide_index=True)
+st.dataframe(
+    display[['Team', '# Clients', 'Cups', 'Blitz Revenue', 'Profit', 'PoP%']].sort_values('Team'),
+    column_config={
+        '# Clients':      vol_col('# Clients'),
+        'Cups':           vol_col('Cups'),
+        'Blitz Revenue':  idr_col('Blitz Revenue'),
+        'Profit':         idr_col('Profit'),
+        'PoP%':           pct_col('PoP%', signed=True),
+    },
+    width="stretch", hide_index=True,
+)
 
 st.divider()
 
@@ -65,11 +72,12 @@ trend_6 = trend_all[trend_all['Label'].isin(trend_all['Label'].tail(6).unique())
 
 fig_stack = px.bar(
     trend_6, x='Label', y='Profit', color='Blitz Team',
-    barmode='stack', template='plotly_white', height=400,
-    labels={'Profit': 'Profit (IDR)', 'Label': 'Period'}
+    barmode='stack', height=400,
+    labels={'Profit': 'Profit (IDR)', 'Label': 'Period'},
 )
-fig_stack.update_layout(xaxis_tickangle=-45, hovermode='x unified', legend=dict(orientation='h', y=1.05))
-st.plotly_chart(fig_stack, use_container_width=True)
+fig_stack.update_layout(xaxis_tickangle=-45)
+apply_chart_theme(fig_stack)
+st.plotly_chart(fig_stack, width="stretch")
 
 st.divider()
 
@@ -102,16 +110,23 @@ for team in teams:
         client_agg[f'Profit {pop_lbl}%'] = None
 
     with st.expander(f"🏙️ {team} — {len(client_agg)} clients", expanded=True):
-        display_cl = client_agg.copy()
-        display_cl['Cups'] = display_cl['Total Cups Sold'].apply(fmt_vol)
-        display_cl['Blitz Rev'] = display_cl['Blitz Revenue'].apply(fmt_idr)
-        display_cl['Profit'] = display_cl['Profit Calc'].apply(fmt_idr)
-        display_cl['Riders'] = display_cl['Total Active Riders'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else '-')
         pop_col = f'Profit {pop_lbl}%'
-        display_cl[pop_col] = client_agg[pop_col].apply(
-            lambda x: f"▲ {x:.1f}%" if pd.notna(x) and x > 0
-            else f"▼ {abs(x):.1f}%" if pd.notna(x) and x < 0 else "—"
+        display_cl = client_agg.rename(columns={
+            'Total Cups Sold': 'Cups',
+            'Total Active Riders': 'Riders',
+            'Blitz Revenue': 'Blitz Rev',
+            'Profit Calc': 'Profit',
+        }).copy()
+        show_cols = [c for c in ['Client Name', 'Cups', 'Riders', 'Blitz Rev', 'Profit', pop_col]
+                     if c in display_cl.columns]
+        st.dataframe(
+            display_cl[show_cols],
+            column_config={
+                'Cups':       vol_col('Cups'),
+                'Riders':     vol_col('Riders'),
+                'Blitz Rev':  idr_col('Blitz Rev'),
+                'Profit':     idr_col('Profit'),
+                pop_col:      pct_col(pop_col, signed=True),
+            },
+            width="stretch", hide_index=True,
         )
-        show_cols = ['Client Name', 'Cups', 'Riders', 'Blitz Rev', 'Profit', pop_col]
-        show_cols = [c for c in show_cols if c in display_cl.columns]
-        st.dataframe(display_cl[show_cols], use_container_width=True, hide_index=True)

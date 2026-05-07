@@ -6,7 +6,8 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_trend)
+                   pop_pct, pop_label, build_trend,
+                   apply_chart_theme, idr_col, vol_col, pct_col)
 from data_loader import COST_COMPONENTS
 
 st.set_page_config(page_title="By Team | Blitz", page_icon="🏙️", layout="wide")
@@ -80,24 +81,19 @@ trend_t = build_trend(df, ['Blitz Team'], view_mode)
 
 fig_t = px.bar(
     trend_t, x='Label', y=metric_choice, color='Blitz Team',
-    barmode='group', template='plotly_white', height=400,
+    barmode='group', height=400,
     color_discrete_map={'Jakarta': C_REVENUE, 'Surabaya': C_GP},
     title=f"{metric_choice} — {view_mode} by Team",
-    labels={metric_choice: 'IDR'}
+    labels={metric_choice: 'IDR'},
 )
-fig_t.update_layout(hovermode='x unified', xaxis_tickangle=-45,
-                    legend=dict(orientation='h', y=1.05))
+fig_t.update_layout(xaxis_tickangle=-45)
 if metric_choice == 'GP':
     fig_t.add_hline(y=0, line_dash='dash', line_color='red', opacity=0.4)
-st.plotly_chart(fig_t, use_container_width=True)
+apply_chart_theme(fig_t)
+st.plotly_chart(fig_t, width="stretch")
 
-# PoP % table per team
+# PoP % table per team — keep numeric for sortability
 st.markdown("**Period-over-Period % Change by Team**")
-def fmt_pop_plain(v):
-    if pd.isna(v):
-        return '—'
-    return f"{'▲' if v > 0 else '▼'} {abs(v):.1f}%"
-
 pop_rows = []
 for team in teams:
     team_trend = trend_t[trend_t['Blitz Team'] == team].copy()
@@ -106,14 +102,25 @@ for team in teams:
         prev_r = team_trend.iloc[-2]
         pop_rows.append({
             'Team': team,
-            f'GP {pop}%':  fmt_pop_plain(pop_pct(last['GP'], prev_r['GP'])),
-            f'Rev {pop}%': fmt_pop_plain(pop_pct(last['Revenue'], prev_r['Revenue'])),
-            f'Vol {pop}%': fmt_pop_plain(pop_pct(last['Volume'], prev_r['Volume'])),
-            'Latest GP':  fmt_idr(last['GP']),
-            'Latest Rev': fmt_idr(last['Revenue']),
+            f'GP {pop}%':  pop_pct(last['GP'], prev_r['GP']),
+            f'Rev {pop}%': pop_pct(last['Revenue'], prev_r['Revenue']),
+            f'Vol {pop}%': pop_pct(last['Volume'], prev_r['Volume']),
+            'Latest GP':   last['GP'],
+            'Latest Rev':  last['Revenue'],
         })
 if pop_rows:
-    st.dataframe(pd.DataFrame(pop_rows), use_container_width=True, hide_index=True)
+    pop_df = pd.DataFrame(pop_rows)
+    st.dataframe(
+        pop_df,
+        column_config={
+            f'GP {pop}%':  pct_col(f'GP {pop}%', signed=True),
+            f'Rev {pop}%': pct_col(f'Rev {pop}%', signed=True),
+            f'Vol {pop}%': pct_col(f'Vol {pop}%', signed=True),
+            'Latest GP':   idr_col('Latest GP'),
+            'Latest Rev':  idr_col('Latest Rev'),
+        },
+        width="stretch", hide_index=True,
+    )
 
 st.divider()
 
@@ -127,11 +134,11 @@ cost_long = cost_long[cost_long['Amount'] > 0]
 
 fig_cost = px.bar(
     cost_long, x='Blitz Team', y='Amount', color='Label',
-    barmode='stack', template='plotly_white', height=400,
-    title="Cost Breakdown by Team", labels={'Amount': 'IDR', 'Label': 'Component'}
+    barmode='stack', height=400,
+    title="Cost Breakdown by Team", labels={'Amount': 'IDR', 'Label': 'Component'},
 )
-fig_cost.update_layout(hovermode='x unified', legend=dict(orientation='h', y=1.05))
-st.plotly_chart(fig_cost, use_container_width=True)
+apply_chart_theme(fig_cost)
+st.plotly_chart(fig_cost, width="stretch")
 
 rider_pct = (
     df.groupby('Blitz Team', observed=True)
@@ -154,12 +161,12 @@ sla_t = (
 )
 fig_sla = px.bar(
     sla_t, x='Blitz Team', y='Delivery Volume', color='SLA Type',
-    barmode='stack', template='plotly_white', height=360,
+    barmode='stack', height=360,
     title="Delivery Volume by SLA Type and Team",
-    labels={'Delivery Volume': 'Deliveries'}
+    labels={'Delivery Volume': 'Deliveries'},
 )
-fig_sla.update_layout(hovermode='x unified', legend=dict(orientation='h', y=1.05))
-st.plotly_chart(fig_sla, use_container_width=True)
+apply_chart_theme(fig_sla)
+st.plotly_chart(fig_sla, width="stretch")
 
 st.divider()
 
@@ -201,18 +208,16 @@ for team in teams:
         client_agg[f'GP {pop}%'] = None
 
     with st.expander(f"🏙️ {team} — {len(client_agg)} clients", expanded=True):
-        display_client = client_agg.copy()
-        display_client['Revenue'] = display_client['Revenue'].apply(fmt_idr)
-        display_client['Cost'] = display_client['Cost'].apply(fmt_idr)
-        display_client['GP'] = display_client['GP'].apply(fmt_idr)
-        display_client['Volume'] = display_client['Volume'].apply(fmt_vol)
-        display_client['Margin'] = display_client['GP Margin %'].apply(fmt_pct)
         pop_col = f'GP {pop}%'
-        display_client[pop_col] = client_agg[pop_col].apply(
-            lambda x: f"▲ {x:.1f}%" if pd.notna(x) and x > 0
-            else f"▼ {abs(x):.1f}%" if pd.notna(x) and x < 0 else "—"
-        )
         st.dataframe(
-            display_client[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'Margin', pop_col]],
-            use_container_width=True, hide_index=True
+            client_agg[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %', pop_col]],
+            column_config={
+                'Volume':      vol_col('Volume'),
+                'Revenue':     idr_col('Revenue'),
+                'Cost':        idr_col('Cost'),
+                'GP':          idr_col('GP'),
+                'GP Margin %': pct_col('Margin', signed=False),
+                pop_col:       pct_col(pop_col, signed=True),
+            },
+            width="stretch", hide_index=True,
         )

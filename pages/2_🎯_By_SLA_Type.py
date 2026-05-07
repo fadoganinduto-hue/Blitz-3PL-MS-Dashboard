@@ -1,8 +1,7 @@
-"""By Project — per-project P&L for delivery clients with project-level breakdowns.
+"""By SLA Type — per-SLA-type P&L for delivery clients.
 
-Project is a column in the delivery `Raw Data Source` sheet. Many clients have
-no project label (single-stream business), so this page filters to only rows
-where Project is populated.
+SLA Type is a column in the delivery `Raw Data Source` sheet. Rows without an
+SLA Type label are excluded from this view.
 """
 import streamlit as st
 import pandas as pd
@@ -16,38 +15,37 @@ from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    idr_col, vol_col, pct_col)
 from data_loader import COST_COMPONENTS
 
-st.set_page_config(page_title="By Project | Blitz", page_icon="🏗️", layout="wide")
-st.title("🏗️ By Project")
-st.caption("Per-project P&L for clients with multi-project structures. "
-           "Clients without a project label are excluded from this view.")
+st.set_page_config(page_title="By SLA Type | Blitz", page_icon="🎯", layout="wide")
+st.title("🎯 By SLA Type")
+st.caption("Per-SLA-type P&L. Drill into each SLA tier to see clients and trend.")
 
 df_full = require_data()
 
-if 'Project' not in df_full.columns:
+if 'SLA Type' not in df_full.columns:
     st.error(
-        "The 'Project' column is missing from the loaded delivery data. "
-        "Confirm the source workbook still has the Project column in Raw Data Source."
+        "The 'SLA Type' column is missing from the loaded delivery data. "
+        "Confirm the source workbook still has the SLA Type column in Raw Data Source."
     )
     st.stop()
 
-# Keep only rows with a non-blank Project value
+# Keep only rows with a non-blank SLA Type
 df_full = df_full[
-    df_full['Project'].notna()
-    & (df_full['Project'].astype(str).str.strip() != '')
+    df_full['SLA Type'].notna()
+    & (df_full['SLA Type'].astype(str).str.strip() != '')
 ]
 
 if df_full.empty:
-    st.warning("No rows with a project label found.")
+    st.warning("No rows with an SLA Type label found.")
     st.stop()
 
-df = sidebar_filters(df_full, page_key="project")
+df = sidebar_filters(df_full, page_key="sla")
 
 if df.empty:
     st.warning("No data matches the current filters.")
     st.stop()
 
 # ── Period mode ──────────────────────────────────────────────────────────────
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="project_view")
+view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="sla_view")
 pop = pop_label(view_mode)
 
 periods = get_available_periods(df, view_mode)
@@ -71,15 +69,8 @@ else:
 if prev_info:
     st.caption(f"Comparing vs {prev_lbl}")
 
-
-def fmt_delta(v):
-    if v is None or pd.isna(v):
-        return '—'
-    return f"{'▲' if v > 0 else '▼'} {abs(v):.1f}%"
-
-
 lw_agg = (
-    curr_df.groupby('Project', observed=True)
+    curr_df.groupby('SLA Type', observed=True)
     .agg(
         Volume=('Delivery Volume', 'sum'),
         Revenue=('Total Revenue', 'sum'),
@@ -91,20 +82,20 @@ lw_agg = (
 )
 if not prev_df.empty:
     pw_agg = (
-        prev_df.groupby('Project', observed=True)
+        prev_df.groupby('SLA Type', observed=True)
         .agg(GP_prev=('GP', 'sum'), Revenue_prev=('Total Revenue', 'sum'))
         .reset_index()
     )
 else:
-    pw_agg = pd.DataFrame(columns=['Project', 'GP_prev', 'Revenue_prev'])
+    pw_agg = pd.DataFrame(columns=['SLA Type', 'GP_prev', 'Revenue_prev'])
 
-lw = lw_agg.merge(pw_agg, on='Project', how='left').fillna(0)
+lw = lw_agg.merge(pw_agg, on='SLA Type', how='left').fillna(0)
 lw['GP Margin %'] = np.where(lw['Revenue'] != 0, lw['GP'] / lw['Revenue'] * 100, 0)
 lw[f'GP {pop} %'] = lw.apply(lambda r: pop_pct(r['GP'], r['GP_prev']), axis=1)
 lw = lw.sort_values('GP', ascending=False).reset_index(drop=True)
 
 st.dataframe(
-    lw[['Project', 'Clients', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %', f'GP {pop} %']],
+    lw[['SLA Type', 'Clients', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %', f'GP {pop} %']],
     column_config={
         'Clients':     vol_col('Clients'),
         'Volume':      vol_col('Volume'),
@@ -123,8 +114,8 @@ st.divider()
 st.subheader("Period Rankings (all filtered data)")
 sort_col = st.selectbox("Sort by", ['GP', 'Revenue', 'Volume', 'GP Margin %'], index=0)
 
-project_agg = (
-    df.groupby('Project', observed=True)
+sla_agg = (
+    df.groupby('SLA Type', observed=True)
     .agg(
         Volume=('Delivery Volume', 'sum'),
         Revenue=('Total Revenue', 'sum'),
@@ -134,13 +125,13 @@ project_agg = (
     )
     .reset_index()
 )
-project_agg['GP Margin %'] = np.where(
-    project_agg['Revenue'] != 0, project_agg['GP'] / project_agg['Revenue'] * 100, 0
+sla_agg['GP Margin %'] = np.where(
+    sla_agg['Revenue'] != 0, sla_agg['GP'] / sla_agg['Revenue'] * 100, 0
 )
-project_agg = project_agg.sort_values(sort_col, ascending=False).reset_index(drop=True)
+sla_agg = sla_agg.sort_values(sort_col, ascending=False).reset_index(drop=True)
 
 st.dataframe(
-    project_agg[['Project', 'Clients', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+    sla_agg[['SLA Type', 'Clients', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
     column_config={
         'Clients':     vol_col('Clients'),
         'Volume':      vol_col('Volume'),
@@ -152,55 +143,55 @@ st.dataframe(
     width="stretch", hide_index=True,
 )
 
-# Top N bar chart
-top_n = min(15, len(project_agg))
-top_projects = project_agg.head(top_n)
+# Top SLA types bar
+top_n = min(10, len(sla_agg))
+top_sla = sla_agg.head(top_n)
 fig_rank = px.bar(
-    top_projects, x='Project', y=sort_col,
+    top_sla, x='SLA Type', y=sort_col,
     color_discrete_sequence=[C_GP if sort_col == 'GP' else C_REVENUE],
-    height=380, title=f"Top {top_n} Projects by {sort_col}",
+    height=380, title=f"Top {top_n} SLA Types by {sort_col}",
 )
-fig_rank.update_layout(xaxis_tickangle=-25)
+fig_rank.update_layout(xaxis_tickangle=-15)
 apply_chart_theme(fig_rank)
 st.plotly_chart(fig_rank, width="stretch")
 
 st.divider()
 
-# ── Project Drilldown ────────────────────────────────────────────────────────
-st.subheader("Project Drilldown")
-sel_project = st.selectbox("Select a project", sorted(df['Project'].dropna().unique()))
-pdf = df[df['Project'] == sel_project].copy()
+# ── SLA Type Drilldown ───────────────────────────────────────────────────────
+st.subheader("SLA Type Drilldown")
+sel_sla = st.selectbox("Select an SLA type", sorted(df['SLA Type'].dropna().unique()))
+sdf = df[df['SLA Type'] == sel_sla].copy()
 
-if pdf.empty:
+if sdf.empty:
     st.stop()
 
-# Project-level KPIs
+# SLA-level KPIs
 ck1, ck2, ck3, ck4, ck5 = st.columns(5)
-ck1.metric("Revenue", fmt_idr(pdf['Total Revenue'].sum()))
-ck2.metric("Cost", fmt_idr(pdf['Total Cost'].sum()))
-ck3.metric("GP", fmt_idr(pdf['GP'].sum()))
-gpm_p = pdf['GP'].sum() / pdf['Total Revenue'].sum() * 100 if pdf['Total Revenue'].sum() else 0
-ck4.metric("Margin", fmt_pct(gpm_p))
-ck5.metric("Volume", fmt_vol(pdf['Delivery Volume'].sum()))
+ck1.metric("Revenue", fmt_idr(sdf['Total Revenue'].sum()))
+ck2.metric("Cost", fmt_idr(sdf['Total Cost'].sum()))
+ck3.metric("GP", fmt_idr(sdf['GP'].sum()))
+gpm_s = sdf['GP'].sum() / sdf['Total Revenue'].sum() * 100 if sdf['Total Revenue'].sum() else 0
+ck4.metric("Margin", fmt_pct(gpm_s))
+ck5.metric("Volume", fmt_vol(sdf['Delivery Volume'].sum()))
 
-# Clients within this project
-st.markdown("#### Clients in this project")
-client_in_proj = (
-    pdf.groupby('Client Name', observed=True)
+# Clients within this SLA type
+st.markdown("#### Clients in this SLA type")
+client_in_sla = (
+    sdf.groupby('Client Name', observed=True)
     .agg(Volume=('Delivery Volume', 'sum'),
          Revenue=('Total Revenue', 'sum'),
          Cost=('Total Cost', 'sum'),
          GP=('GP', 'sum'))
     .reset_index()
 )
-client_in_proj['Margin %'] = np.where(
-    client_in_proj['Revenue'] != 0,
-    client_in_proj['GP'] / client_in_proj['Revenue'] * 100, 0
+client_in_sla['Margin %'] = np.where(
+    client_in_sla['Revenue'] != 0,
+    client_in_sla['GP'] / client_in_sla['Revenue'] * 100, 0
 )
-client_in_proj = client_in_proj.sort_values('GP', ascending=False)
+client_in_sla = client_in_sla.sort_values('GP', ascending=False)
 
 st.dataframe(
-    client_in_proj[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'Margin %']],
+    client_in_sla[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'Margin %']],
     column_config={
         'Volume':   vol_col('Volume'),
         'Revenue':  idr_col('Revenue'),
@@ -213,28 +204,27 @@ st.dataframe(
 
 # Trend
 st.markdown(f"#### {view_mode} P&L Trend")
-trend_p = build_trend(pdf, [], view_mode)
-trend_p['GP Margin %'] = np.where(
-    trend_p['Revenue'] != 0, trend_p['GP'] / trend_p['Revenue'] * 100, 0
+trend_s = build_trend(sdf, [], view_mode)
+trend_s['GP Margin %'] = np.where(
+    trend_s['Revenue'] != 0, trend_s['GP'] / trend_s['Revenue'] * 100, 0
 )
 for m in ['Revenue', 'GP', 'Volume']:
-    trend_p[f'{m} PoP%'] = trend_p[m].pct_change() * 100
+    trend_s[f'{m} PoP%'] = trend_s[m].pct_change() * 100
 
 fig = go.Figure()
-fig.add_bar(x=trend_p['Label'], y=trend_p['Revenue'], name='Revenue',
+fig.add_bar(x=trend_s['Label'], y=trend_s['Revenue'], name='Revenue',
             marker_color=C_REVENUE, opacity=0.8)
-fig.add_bar(x=trend_p['Label'], y=trend_p['Cost'], name='Cost',
+fig.add_bar(x=trend_s['Label'], y=trend_s['Cost'], name='Cost',
             marker_color=C_COST, opacity=0.8)
-fig.add_scatter(x=trend_p['Label'], y=trend_p['GP'], mode='lines+markers',
+fig.add_scatter(x=trend_s['Label'], y=trend_s['GP'], mode='lines+markers',
                 name='GP', line=dict(color=C_GP, width=2))
 fig.update_layout(barmode='group', height=400, yaxis_title='IDR',
-                  xaxis_tickangle=-45, title=f"{sel_project} — {view_mode} P&L")
+                  xaxis_tickangle=-45, title=f"{sel_sla} — {view_mode} P&L")
 apply_chart_theme(fig)
 st.plotly_chart(fig, width="stretch")
 
-
 st.dataframe(
-    trend_p[['Label', 'Volume', 'Volume PoP%', 'Revenue', 'Revenue PoP%',
+    trend_s[['Label', 'Volume', 'Volume PoP%', 'Revenue', 'Revenue PoP%',
              'Cost', 'GP', 'GP PoP%', 'GP Margin %']],
     column_config={
         'Label':        st.column_config.TextColumn('Period'),
@@ -251,11 +241,11 @@ st.dataframe(
 )
 
 # Cost structure pie
-cost_data = {label: pdf[col].sum() for col, label in COST_COMPONENTS.items()
-             if col in pdf.columns and pdf[col].sum() > 0}
+cost_data = {label: sdf[col].sum() for col, label in COST_COMPONENTS.items()
+             if col in sdf.columns and sdf[col].sum() > 0}
 if cost_data:
     cost_df = pd.DataFrame({'Component': list(cost_data.keys()), 'Amount': list(cost_data.values())})
     fig_cost = px.pie(cost_df, values='Amount', names='Component', hole=0.35,
-                      height=360, title=f"{sel_project} — Cost Structure")
+                      height=360, title=f"{sel_sla} — Cost Structure")
     apply_chart_theme(fig_cost)
     st.plotly_chart(fig_cost, width="stretch")

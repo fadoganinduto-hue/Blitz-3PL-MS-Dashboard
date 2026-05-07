@@ -116,6 +116,7 @@ PAGES = {
         st.Page("pages/1_📊_Overview.py",            title="Overview",           icon="📊", default=True),
         st.Page("pages/2_👥_By_Client.py",           title="By Client",          icon="👥"),
         st.Page("pages/2_🏗️_By_Project.py",          title="By Project",         icon="🏗️"),
+        st.Page("pages/2_🎯_By_SLA_Type.py",         title="By SLA Type",        icon="🎯"),
         st.Page("pages/2_📅_Weekly_Performance.py",  title="Weekly Performance", icon="📅"),
         st.Page("pages/3_🗺️_By_Location.py",         title="By Location",        icon="🗺️"),
         st.Page("pages/4_🏙️_By_Team.py",             title="By Team",            icon="🏙️"),

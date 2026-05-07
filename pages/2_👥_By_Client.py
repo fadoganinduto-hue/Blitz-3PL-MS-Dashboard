@@ -6,7 +6,8 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_trend)
+                   pop_pct, pop_label, build_trend,
+                   apply_chart_theme, idr_col, vol_col, pct_col)
 from data_loader import COST_COMPONENTS
 
 st.set_page_config(page_title="By Client | Blitz", page_icon="👥", layout="wide")
@@ -62,21 +63,17 @@ lw['GP Margin %'] = np.where(lw['Revenue'] != 0, lw['GP'] / lw['Revenue'] * 100,
 lw[f'GP {pop} %'] = lw.apply(lambda r: pop_pct(r['GP'], r['GP_prev']), axis=1)
 lw = lw.sort_values('GP', ascending=False).reset_index(drop=True)
 
-def fmt_delta(v):
-    if v is None or pd.isna(v):
-        return '—'
-    return f"{'▲' if v > 0 else '▼'} {abs(v):.1f}%"
-
-disp_lw = lw.copy()
-disp_lw['Revenue']      = disp_lw['Revenue'].apply(fmt_idr)
-disp_lw['Cost']         = disp_lw['Cost'].apply(fmt_idr)
-disp_lw['GP']           = disp_lw['GP'].apply(fmt_idr)
-disp_lw['Margin']       = disp_lw['GP Margin %'].apply(fmt_pct)
-disp_lw['Volume']       = disp_lw['Volume'].apply(fmt_vol)
-disp_lw[f'GP {pop} %'] = disp_lw[f'GP {pop} %'].apply(fmt_delta)
 st.dataframe(
-    disp_lw[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'Margin', f'GP {pop} %']],
-    use_container_width=True, hide_index=True, height=400
+    lw[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %', f'GP {pop} %']],
+    column_config={
+        'Volume':         vol_col('Volume'),
+        'Revenue':        idr_col('Revenue'),
+        'Cost':           idr_col('Cost'),
+        'GP':             idr_col('GP'),
+        'GP Margin %':    pct_col('Margin', signed=False),
+        f'GP {pop} %':    pct_col(f'GP {pop} %', signed=True),
+    },
+    width="stretch", hide_index=True, height=400,
 )
 
 st.divider()
@@ -96,15 +93,16 @@ client_agg['GP Margin %'] = np.where(
 )
 client_agg = client_agg.sort_values(sort_col, ascending=False).reset_index(drop=True)
 
-disp_all = client_agg.copy()
-disp_all['Revenue']     = disp_all['Revenue'].apply(fmt_idr)
-disp_all['Cost']        = disp_all['Cost'].apply(fmt_idr)
-disp_all['GP']          = disp_all['GP'].apply(fmt_idr)
-disp_all['GP Margin %'] = disp_all['GP Margin %'].apply(fmt_pct)
-disp_all['Volume']      = disp_all['Volume'].apply(fmt_vol)
 st.dataframe(
-    disp_all[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
-    use_container_width=True, hide_index=True
+    client_agg[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+    column_config={
+        'Volume':      vol_col('Volume'),
+        'Revenue':     idr_col('Revenue'),
+        'Cost':        idr_col('Cost'),
+        'GP':          idr_col('GP'),
+        'GP Margin %': pct_col('GP Margin %', signed=False),
+    },
+    width="stretch", hide_index=True,
 )
 
 st.divider()
@@ -139,28 +137,26 @@ fig.add_bar(x=trend_c['Label'], y=trend_c['Cost'],    name='Cost',
             marker_color=C_COST, opacity=0.8)
 fig.add_scatter(x=trend_c['Label'], y=trend_c['GP'], mode='lines+markers',
                 name='GP', line=dict(color=C_GP, width=2))
-fig.update_layout(barmode='group', hovermode='x unified', template='plotly_white',
-                  height=400, legend=dict(orientation='h', y=1.05), yaxis_title='IDR',
+fig.update_layout(barmode='group', height=400, yaxis_title='IDR',
                   xaxis_tickangle=-45, title=f"{sel_client} — {view_mode} P&L")
-st.plotly_chart(fig, use_container_width=True)
+apply_chart_theme(fig)
+st.plotly_chart(fig, width="stretch")
 
-def fmt_pop_plain(v):
-    if pd.isna(v):
-        return '—'
-    return f"{'▲' if v > 0 else '▼'} {abs(v):.1f}%"
-
-disp_drill = trend_c.copy()
-for col in ['Revenue', 'Cost', 'GP']:
-    disp_drill[col] = disp_drill[col].apply(fmt_idr)
-disp_drill['Margin']   = disp_drill['GP Margin %'].apply(fmt_pct)
-disp_drill['Volume']   = disp_drill['Volume'].apply(fmt_vol)
-disp_drill['Rev PoP%'] = disp_drill['Revenue PoP%'].apply(fmt_pop_plain)
-disp_drill['GP PoP%']  = disp_drill['GP PoP%'].apply(fmt_pop_plain)
-disp_drill['Vol PoP%'] = disp_drill['Volume PoP%'].apply(fmt_pop_plain)
 st.dataframe(
-    disp_drill[['Label', 'Volume', 'Vol PoP%', 'Revenue', 'Rev PoP%',
-                'Cost', 'GP', 'GP PoP%', 'Margin']],
-    use_container_width=True, hide_index=True
+    trend_c[['Label', 'Volume', 'Volume PoP%', 'Revenue', 'Revenue PoP%',
+             'Cost', 'GP', 'GP PoP%', 'GP Margin %']],
+    column_config={
+        'Label':        st.column_config.TextColumn('Period'),
+        'Volume':       vol_col('Volume'),
+        'Volume PoP%':  pct_col('Vol PoP%', signed=True),
+        'Revenue':      idr_col('Revenue'),
+        'Revenue PoP%': pct_col('Rev PoP%', signed=True),
+        'Cost':         idr_col('Cost'),
+        'GP':           idr_col('GP'),
+        'GP PoP%':      pct_col('GP PoP%', signed=True),
+        'GP Margin %':  pct_col('Margin', signed=False),
+    },
+    width="stretch", hide_index=True,
 )
 
 # Cost structure pie
@@ -169,6 +165,7 @@ cost_data = {label: cdf[col].sum() for col, label in COST_COMPONENTS.items()
 if cost_data:
     cost_df = pd.DataFrame({'Component': list(cost_data.keys()), 'Amount': list(cost_data.values())})
     fig_cost = px.pie(cost_df, values='Amount', names='Component', hole=0.35,
-                      template='plotly_white', height=360,
+                      height=360,
                       title=f"{sel_client} — Cost Structure")
-    st.plotly_chart(fig_cost, use_container_width=True)
+    apply_chart_theme(fig_cost)
+    st.plotly_chart(fig_cost, width="stretch")

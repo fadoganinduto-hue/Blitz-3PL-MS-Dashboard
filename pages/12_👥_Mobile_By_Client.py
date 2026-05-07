@@ -4,7 +4,8 @@ import plotly.express as px
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_mobile_trend)
+                   pop_pct, pop_label, build_mobile_trend,
+                   apply_chart_theme, idr_col, vol_col, pct_col)
 from data_loader import mobile_aggregate
 
 st.set_page_config(page_title="Mobile By Client | Blitz", page_icon="👥", layout="wide")
@@ -56,20 +57,25 @@ merged['Rev per Driver'] = np.where(
 )
 
 display = merged[['Client Name', 'Total Cups Sold', 'Total Active Riders',
-                   'Cups per Driver', 'Rev per Driver',
-                   'Gross Revenue', 'Blitz Revenue', 'Profit Calc']].copy()
+                  'Cups per Driver', 'Rev per Driver',
+                  'Gross Revenue', 'Blitz Revenue', 'Profit Calc', 'PoP%']].copy()
 display.columns = ['Client', 'Cups', 'Riders', 'Cups/Driver', 'Rev/Driver',
-                    'Gross Revenue', 'Blitz Revenue', 'Profit']
-display['Cups'] = display['Cups'].apply(fmt_vol)
-display['Riders'] = display['Riders'].apply(fmt_vol)
-display['Cups/Driver'] = display['Cups/Driver'].apply(lambda x: f"{x:,.1f}")
-display['Rev/Driver'] = display['Rev/Driver'].apply(fmt_idr)
-display['Gross Revenue'] = display['Gross Revenue'].apply(fmt_idr)
-display['Blitz Revenue'] = display['Blitz Revenue'].apply(fmt_idr)
-display['Profit'] = display['Profit'].apply(fmt_idr)
-display['PoP%'] = merged['PoP%'].apply(lambda x: f"▲ {x:.1f}%" if x and x > 0 else f"▼ {abs(x):.1f}%" if x and x < 0 else "—")
+                   'Gross Revenue', 'Blitz Revenue', 'Profit', 'PoP%']
 
-st.dataframe(display.sort_values('Client'), use_container_width=True, hide_index=True)
+st.dataframe(
+    display.sort_values('Profit', ascending=False),
+    column_config={
+        'Cups':           vol_col('Cups'),
+        'Riders':         vol_col('Riders'),
+        'Cups/Driver':    st.column_config.NumberColumn('Cups/Driver', format="%.1f"),
+        'Rev/Driver':     idr_col('Rev/Driver'),
+        'Gross Revenue':  idr_col('Gross Revenue'),
+        'Blitz Revenue':  idr_col('Blitz Revenue'),
+        'Profit':         idr_col('Profit'),
+        'PoP%':           pct_col('PoP%', signed=True),
+    },
+    width="stretch", hide_index=True,
+)
 
 st.divider()
 
@@ -78,10 +84,11 @@ st.subheader("Top 10 Clients by Profit")
 top_profit = merged.nlargest(10, 'Profit Calc')[['Client Name', 'Profit Calc']]
 fig_profit = px.bar(top_profit, y='Client Name', x='Profit Calc', orientation='h',
                     color='Profit Calc', color_continuous_scale='greens',
-                    template='plotly_white', height=380,
+                    height=380,
                     labels={'Profit Calc': 'Profit (IDR)'})
 fig_profit.update_layout(yaxis={'categoryorder': 'total ascending'})
-st.plotly_chart(fig_profit, use_container_width=True)
+apply_chart_theme(fig_profit)
+st.plotly_chart(fig_profit, width="stretch")
 
 st.divider()
 
@@ -95,9 +102,10 @@ if others > 0:
     top15 = pd.concat([top15, pd.DataFrame([{'Client Name': 'Others', 'Blitz Revenue': others}])], ignore_index=True)
 
 fig_pie = px.pie(top15, values='Blitz Revenue', names='Client Name', hole=0.4,
-                 template='plotly_white', height=420)
+                 height=420)
 fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-st.plotly_chart(fig_pie, use_container_width=True)
+apply_chart_theme(fig_pie)
+st.plotly_chart(fig_pie, width="stretch")
 
 st.divider()
 
@@ -112,7 +120,8 @@ if not cdf.empty:
     trend_12 = trend_client.tail(12)
 
     fig_drill = px.bar(trend_12, x='Label', y='Profit', color='Profit',
-                       color_continuous_scale='blues', template='plotly_white', height=380,
+                       color_continuous_scale='blues', height=380,
                        labels={'Profit': 'Profit (IDR)', 'Label': 'Period'})
-    fig_drill.update_layout(xaxis_tickangle=-45, hovermode='x unified')
-    st.plotly_chart(fig_drill, use_container_width=True)
+    fig_drill.update_layout(xaxis_tickangle=-45)
+    apply_chart_theme(fig_drill)
+    st.plotly_chart(fig_drill, width="stretch")
