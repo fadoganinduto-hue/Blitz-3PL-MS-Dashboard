@@ -82,16 +82,32 @@ cups = _safe_col(agg_df, 'Total Cups Sold')
 agg_df['Cups per Driver'] = (cups / riders).fillna(0)
 agg_df['Revenue per Driver'] = (agg_df['Gross Revenue'] / riders).fillna(0)
 
-# Sort and label
+# Sort and label.
+# Note: pandas 3.0+ uses pyarrow-backed string arrays by default which don't
+# always concat cleanly with regular Python strings — explicit .astype(str)
+# on every operand keeps the operation in plain object/str dtype.
 if view_mode == "Weekly":
     agg_df = agg_df.sort_values(['Year', 'Week (by Year)'])
-    agg_df['Period'] = agg_df['Year'].astype(str) + ' W' + agg_df['Week (by Year)'].astype(int).astype(str)
+    agg_df['Period'] = (
+        agg_df['Year'].astype(str)
+        + ' W'
+        + agg_df['Week (by Year)'].astype(int).astype(str)
+    )
     if 'Date Range' in agg_df.columns:
-        agg_df['Period'] = agg_df['Period'] + ' (' + agg_df['Date Range'].fillna('') + ')'
+        agg_df['Period'] = (
+            agg_df['Period'].astype(str)
+            + ' ('
+            + agg_df['Date Range'].fillna('').astype(str)
+            + ')'
+        )
 else:
     agg_df['Month'] = pd.Categorical(agg_df['Month'], categories=MONTH_ORDER, ordered=True)
     agg_df = agg_df.sort_values(['Year', 'Month'])
-    agg_df['Period'] = agg_df['Year'].astype(str) + ' ' + agg_df['Month'].astype(str)
+    agg_df['Period'] = (
+        agg_df['Year'].astype(str)
+        + ' '
+        + agg_df['Month'].astype(str)
+    )
 
 # ── Build display table ───────────────────────────────────────────────────────
 display_cols = (ops_cols + ['Cups per Driver', 'Revenue per Driver'] +
@@ -141,7 +157,7 @@ for c in display_cols:
 
 st.dataframe(
     result.style.format(format_dict, na_rep='-'),
-    use_container_width=True, hide_index=True, height=600
+    width="stretch", hide_index=True, height=600
 )
 
 # ── PoP % Change ──────────────────────────────────────────────────────────────
@@ -166,7 +182,7 @@ def color_pop(val):
 st.dataframe(
     pop_display.style.format({c: '{:+.1f}%' for c in pop_display.columns if '%Δ' in c}, na_rep='—')
                      .map(color_pop, subset=[c for c in pop_display.columns if '%Δ' in c]),
-    use_container_width=True, hide_index=True
+    width="stretch", hide_index=True
 )
 
 # ── Download ──────────────────────────────────────────────────────────────────
