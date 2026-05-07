@@ -138,3 +138,61 @@ To deploy this dashboard to Streamlit Community Cloud with auto-updating data:
 5. All users see fresh data in next page load
 
 ======================================================
+## SharePoint Integration (preferred — replaces manual upload)
+
+The dashboard can read live data directly from SharePoint Excel files via
+Microsoft Graph API. No more manual upload, no more Updater page workflow.
+The team continues editing files in SharePoint as usual; the dashboard pulls
+the latest version on every load (cached 5 min).
+
+**One-time Azure AD setup:**
+
+1. Open Microsoft Entra (https://entra.microsoft.com) as admin
+2. Microsoft Entra ID → App registrations → New registration
+   - Name: "Blitz Operations Dashboard"
+   - Supported account types: single tenant
+   - Redirect URI: leave blank
+3. From the app's Overview page, copy:
+   - Directory (tenant) ID
+   - Application (client) ID
+4. Certificates & secrets → New client secret
+   - Description: "Streamlit Cloud production"
+   - Expires: 24 months
+   - **Copy the Value column immediately — only shown once**
+5. API permissions → Add a permission → Microsoft Graph → Application permissions
+   - Search: Files.Read.All → check → Add
+   - Click "Grant admin consent for [tenant]"
+
+**Configure secrets locally (for testing):**
+
+1. Copy `.streamlit/secrets.toml.example` → `.streamlit/secrets.toml`
+   (the .toml is gitignored — never committed)
+2. Replace placeholders with real values:
+   - AZURE_TENANT_ID
+   - AZURE_CLIENT_ID
+   - AZURE_CLIENT_SECRET (the Value from step 4)
+   - [files] section: paste SharePoint URL of each Excel file
+3. Restart `streamlit run Home.py` — sidebar should show
+   "🔗 Live from SharePoint · cache 5 min" instead of "📁 Loading from local data/"
+
+**Configure secrets on Streamlit Cloud (for production):**
+
+1. Open your app at https://share.streamlit.io
+2. Click ⋯ → Settings → Secrets
+3. Paste the same content as your local secrets.toml into the editor
+4. Save — Streamlit Cloud auto-redeploys with secrets injected
+5. Confirm via the sidebar indicator on the live app
+
+**How the dashboard chooses source:**
+
+- If Azure AD secrets are present → SharePoint mode
+  (file URLs read from `[files]` block; cache 5 min; "↻ Refresh data" button
+  in sidebar forces immediate fetch)
+- Otherwise → falls back to local data/ folder (existing Updater workflow)
+- Both modes feed the same parsers — no other code changes downstream.
+
+**Permission scope:** the app has Files.Read.All Application permission, which
+is **read-only**. The dashboard physically cannot edit any SharePoint file —
+write attempts are rejected at Microsoft's API layer, not at the code level.
+
+======================================================

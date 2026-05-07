@@ -22,6 +22,8 @@ from data_loader import (
     load_ev_data,
     load_action_items,
     load_mobile_data,
+    fetch_from_sharepoint,
+    is_sharepoint_configured,
 )
 from utils import apply_global_styles, render_theme_toggle
 
@@ -37,31 +39,71 @@ st.set_page_config(
 theme_mode = render_theme_toggle()
 apply_global_styles(theme_mode)
 
-# ── Auto-load published data files from data/ folder ──────────────────────────
+# ── Data loading: SharePoint (if configured) → falls back to local data/ ──────
 APP_DIR = Path(__file__).parent
 DATA_DIR = APP_DIR / "data"
 
+# Each entry: (session_key, secrets_key, local_filename, loader, companion_loaders)
+#   - secrets_key       — key under [files] in st.secrets pointing at the SharePoint URL
+#   - local_filename    — fallback file in data/ if SharePoint not configured
+#   - companion_loaders — extra parsers run on the same file bytes (e.g. EV sheet)
 LOADERS = [
-    # Delivery file also yields ev_data + action_items from other sheets
-    ("delivery_data", "delivery_latest.xlsx", load_main_data, [
+    ("delivery_data", "DELIVERY", "delivery_latest.xlsx", load_main_data, [
         ("ev_data", load_ev_data),
         ("action_items", load_action_items),
     ]),
-    ("mobile_data", "mobile_sellers_latest.xlsx", load_mobile_data, []),
+    ("mobile_data", "MOBILE", "mobile_sellers_latest.xlsx", load_mobile_data, []),
 ]
 
-for key, filename, loader, companions in LOADERS:
-    fpath = DATA_DIR / filename
-    if fpath.exists() and key not in st.session_state:
+# Show data source in sidebar so it's obvious which mode is active
+_using_sharepoint = is_sharepoint_configured()
+with st.sidebar:
+    if _using_sharepoint:
+        st.markdown(
+            "<div style='font-size:0.7rem; opacity:0.65; margin-top:0.5rem;'>"
+            "🔗 Live from SharePoint · cache 5 min</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("↻ Refresh data", use_container_width=True, key="_refresh_data"):
+            st.cache_data.clear()
+            st.rerun()
+    else:
+        st.markdown(
+            "<div style='font-size:0.7rem; opacity:0.65; margin-top:0.5rem;'>"
+            "📁 Loading from local data/ folder</div>",
+            unsafe_allow_html=True,
+        )
+
+def _get_file_bytes(secrets_key: str, local_filename: str) -> bytes | None:
+    """Resolve file bytes from SharePoint if configured, else local data/."""
+    if _using_sharepoint:
         try:
-            with open(fpath, "rb") as f:
-                file_bytes = f.read()
-            st.session_state[key] = loader(file_bytes)
-            for companion_key, companion_loader in companions:
-                if companion_key not in st.session_state:
-                    st.session_state[companion_key] = companion_loader(file_bytes)
+            files_secrets = st.secrets.get("files", {})
+            url = files_secrets.get(secrets_key) if hasattr(files_secrets, "get") else files_secrets[secrets_key]
+            if url:
+                return fetch_from_sharepoint(url)
         except Exception as exc:  # noqa: BLE001
-            st.sidebar.error(f"Failed to load {filename}: {exc}")
+            st.sidebar.error(f"SharePoint fetch failed for {secrets_key}: {exc}")
+    fpath = DATA_DIR / local_filename
+    if fpath.exists():
+        with open(fpath, "rb") as f:
+            return f.read()
+    return None
+
+
+for key, secrets_key, filename, loader, companions in LOADERS:
+    if key in st.session_state:
+        continue
+    file_bytes = _get_file_bytes(secrets_key, filename)
+    if file_bytes is None:
+        continue
+    try:
+        st.session_state[key] = loader(file_bytes)
+        for companion_key, companion_loader in companions:
+            if companion_key not in st.session_state:
+                st.session_state[companion_key] = companion_loader(file_bytes)
+    except Exception as exc:  # noqa: BLE001
+        st.sidebar.error(f"Failed to load {filename}: {exc}")
 
 # Backward-compat: legacy pages reference st.session_state['data']
 if "delivery_data" in st.session_state and "data" not in st.session_state:

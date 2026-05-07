@@ -83,6 +83,98 @@ def _clean_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=drop, errors='ignore')
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SharePoint integration (Microsoft Graph API, app-only auth)
+# ─────────────────────────────────────────────────────────────────────────────
+# Fetches Excel files directly from SharePoint so the dashboard always shows
+# the latest data without manual upload/redeploy. The Azure AD app needs
+# `Files.Read.All` Application permission. See SETUP.txt for credential setup.
+#
+# Reads from st.secrets:
+#   AZURE_TENANT_ID     — Directory ID (GUID)
+#   AZURE_CLIENT_ID     — Application ID (GUID)
+#   AZURE_CLIENT_SECRET — Client secret value
+#
+# Returns raw bytes; existing load_* functions parse them unchanged.
+
+def is_sharepoint_configured() -> bool:
+    """True if Azure AD credentials are present in st.secrets."""
+    try:
+        for key in ("AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"):
+            if not st.secrets.get(key):
+                return False
+        return True
+    except (FileNotFoundError, KeyError, AttributeError):
+        return False
+
+
+def _get_graph_access_token() -> str:
+    """Get an app-only Microsoft Graph access token via MSAL.
+
+    Tokens last ~60 minutes; MSAL caches them in-process and refreshes
+    automatically on expiry, so calling this repeatedly is cheap.
+    """
+    import msal
+
+    tenant = st.secrets["AZURE_TENANT_ID"]
+    client_id = st.secrets["AZURE_CLIENT_ID"]
+    client_secret = st.secrets["AZURE_CLIENT_SECRET"]
+
+    authority = f"https://login.microsoftonline.com/{tenant}"
+    app = msal.ConfidentialClientApplication(
+        client_id=client_id,
+        client_credential=client_secret,
+        authority=authority,
+    )
+    result = app.acquire_token_for_client(
+        scopes=["https://graph.microsoft.com/.default"]
+    )
+    if "access_token" not in result:
+        raise RuntimeError(
+            "Azure AD auth failed: "
+            f"{result.get('error_description') or result.get('error') or result}"
+        )
+    return result["access_token"]
+
+
+@st.cache_data(ttl=300, show_spinner="Fetching from SharePoint…")
+def fetch_from_sharepoint(file_url: str) -> bytes:
+    """Download an Excel file from SharePoint via Microsoft Graph API.
+
+    Args:
+        file_url: Full SharePoint URL of the file. Either the browser URL
+            ("https://rideblitz.sharepoint.com/sites/.../file.xlsx") or a
+            shared link ("https://rideblitz.sharepoint.com/:x:/s/.../...")
+            both work — Graph's /shares endpoint accepts either.
+
+    Returns:
+        Raw .xlsx bytes. Pass directly to load_main_data, load_mobile_data,
+        load_borzo_monthly, etc.
+
+    Cache: 5-minute TTL. Multiple page navigations within that window
+    reuse the cached bytes; only the first call after expiry hits Graph.
+    Use st.cache_data.clear() to force a fresh fetch.
+    """
+    import base64
+    import requests
+
+    token = _get_graph_access_token()
+
+    # Microsoft Graph's /shares endpoint accepts a "sharing token" derived
+    # from any SharePoint URL via base64url encoding.
+    encoded = base64.urlsafe_b64encode(file_url.encode()).decode().rstrip("=")
+    sharing_token = f"u!{encoded}"
+
+    response = requests.get(
+        f"https://graph.microsoft.com/v1.0/shares/{sharing_token}/driveItem/content",
+        headers={"Authorization": f"Bearer {token}"},
+        allow_redirects=True,
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.content
+
+
 @st.cache_data(show_spinner="Loading data...")
 def load_main_data(file_bytes: bytes) -> pd.DataFrame:
     sheet = _detect_sheet(file_bytes)
