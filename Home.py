@@ -23,6 +23,7 @@ from data_loader import (
     load_action_items,
     load_mobile_data,
 )
+from utils import apply_global_styles, render_theme_toggle
 
 # ── Page config (defaults; pages may override their own title/icon) ───────────
 st.set_page_config(
@@ -31,6 +32,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ── Lane 2A.1: render Light/Dark toggle in sidebar, then inject theme CSS ─────
+theme_mode = render_theme_toggle()
+apply_global_styles(theme_mode)
 
 # ── Auto-load published data files from data/ folder ──────────────────────────
 APP_DIR = Path(__file__).parent

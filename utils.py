@@ -347,3 +347,265 @@ def build_mobile_trend(df: pd.DataFrame, group_cols: list[str], mode: str) -> pd
     trend['Cups per Driver'] = trend.apply(lambda r: r['Cups'] / r['Riders'] if r['Riders'] > 0 else 0, axis=1)
     trend['Revenue per Driver'] = trend.apply(lambda r: r['GrossRevenue'] / r['Riders'] if r['Riders'] > 0 else 0, axis=1)
     return trend
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lane 2A — Global theme & visual helpers
+# ─────────────────────────────────────────────────────────────────────────────
+# These additions polish the default Streamlit chrome without requiring any
+# page changes. CSS targets Streamlit's stable test IDs (data-testid="...")
+# so it survives Streamlit version bumps.
+#
+# Pages already using `st.metric` automatically get the upgraded card look.
+# Pages building Plotly figures can opt in to the consistent chart shell by
+# wrapping their figure with `apply_chart_theme(fig)` before st.plotly_chart.
+
+_GLOBAL_CSS = """
+<style>
+/* ─── Sidebar polish ─────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] [data-testid="stSidebarNavSeparator"] {
+    margin: 0.4rem 0 0.2rem 0;
+}
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"] {
+    font-size: 0.85rem;
+}
+
+/* Section headings inside the sidebar nav */
+[data-testid="stSidebarNav"] h2,
+[data-testid="stSidebarNav"] h3 {
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.65;
+    margin-top: 0.9rem !important;
+    margin-bottom: 0.25rem !important;
+    padding-left: 0.5rem;
+}
+
+/* ─── Card-style metrics (replaces flat st.metric look) ──────────────────── */
+[data-testid="stMetric"] {
+    background-color: var(--secondary-background-color, rgba(120,120,120,0.04));
+    border: 1px solid rgba(120, 120, 120, 0.16);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+[data-testid="stMetric"]:hover {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+[data-testid="stMetricLabel"] {
+    font-size: 0.7rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    opacity: 0.7;
+}
+[data-testid="stMetricValue"] {
+    font-size: 1.55rem !important;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    margin-top: 4px;
+}
+[data-testid="stMetricDelta"] {
+    display: inline-flex !important;
+    align-items: center;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    padding: 2px 8px !important;
+    border-radius: 999px !important;
+    margin-top: 6px !important;
+    background: rgba(120, 120, 120, 0.10);
+}
+
+/* ─── Page typography ────────────────────────────────────────────────────── */
+.block-container {
+    padding-top: 1.4rem !important;
+    padding-bottom: 3rem !important;
+}
+h1 { font-size: 1.55rem !important; letter-spacing: -0.01em; }
+h2 { font-size: 1.15rem !important; }
+h3 { font-size: 1rem !important; }
+
+/* ─── Dataframes & tables ────────────────────────────────────────────────── */
+[data-testid="stDataFrame"],
+[data-testid="stTable"] {
+    border: 1px solid rgba(120, 120, 120, 0.16);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* ─── Tabs ───────────────────────────────────────────────────────────────── */
+[data-testid="stTabs"] button[role="tab"] {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* ─── Multiselect / select chips ─────────────────────────────────────────── */
+[data-baseweb="tag"] {
+    border-radius: 999px !important;
+}
+</style>
+"""
+
+
+# Dark theme override — applied on top of base styles when toggle = Dark.
+_DARK_OVERRIDE_CSS = """
+<style>
+/* App background + default text */
+.stApp { background-color: #0f172a !important; color: #e2e8f0 !important; }
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background-color: #1e293b !important;
+}
+[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
+[data-testid="stSidebarNav"] h2,
+[data-testid="stSidebarNav"] h3 {
+    color: rgba(226, 232, 240, 0.55) !important;
+}
+[data-testid="stSidebarNavLink"][aria-current="page"] {
+    background-color: rgba(21, 112, 239, 0.18) !important;
+}
+
+/* Headings + body text */
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
+    color: #f1f5f9 !important;
+}
+.stApp p, .stApp label, .stApp .stMarkdown {
+    color: #e2e8f0 !important;
+}
+
+/* KPI metric cards */
+[data-testid="stMetric"] {
+    background-color: #1e293b !important;
+    border-color: rgba(148, 163, 184, 0.18) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+[data-testid="stMetricLabel"], [data-testid="stMetricLabel"] * {
+    color: rgba(226, 232, 240, 0.65) !important;
+}
+[data-testid="stMetricValue"], [data-testid="stMetricValue"] * {
+    color: #f1f5f9 !important;
+}
+[data-testid="stMetricDelta"] {
+    background: rgba(148, 163, 184, 0.18) !important;
+}
+
+/* Dataframes + tables */
+[data-testid="stDataFrame"],
+[data-testid="stTable"] {
+    border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+/* Inputs / selects */
+.stTextInput input,
+.stSelectbox div[data-baseweb="select"] > div,
+.stMultiSelect div[data-baseweb="select"] > div,
+.stDateInput input,
+.stNumberInput input {
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+    border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+/* Filter chips (multiselect tags) */
+[data-baseweb="tag"] {
+    background-color: rgba(21, 112, 239, 0.85) !important;
+    color: #ffffff !important;
+}
+
+/* Radio + tab labels */
+.stRadio label, [data-testid="stTabs"] button[role="tab"] {
+    color: #e2e8f0 !important;
+}
+</style>
+"""
+
+
+def apply_global_styles(theme_mode: str = "Light") -> None:
+    """Inject global CSS. Idempotent across reruns.
+
+    Lane 2A: turns the default Streamlit chrome into the redesigned look —
+    card-style metrics, tighter typography, polished sidebar sections,
+    panel-styled dataframes. Pages don't need to change; CSS targets
+    Streamlit's stable test IDs (`data-testid="..."`).
+
+    Lane 2A.1: when `theme_mode="Dark"`, layers a dark override on top.
+
+    Call once from Home.py after `st.set_page_config()`, passing the value
+    returned by `render_theme_toggle()`.
+    """
+    st.markdown(_GLOBAL_CSS, unsafe_allow_html=True)
+    if theme_mode == "Dark":
+        st.markdown(_DARK_OVERRIDE_CSS, unsafe_allow_html=True)
+
+
+def render_theme_toggle() -> str:
+    """Render a Light/Dark radio at the bottom of the sidebar.
+
+    Persists choice in `st.session_state["theme_mode"]`. Returns the
+    chosen mode string ("Light" or "Dark") so caller can pass it to
+    apply_global_styles.
+
+    Streamlit removed the in-app Settings → Theme picker in v1.40+, so
+    this gives users a runtime toggle without touching config.toml.
+    """
+    if "theme_mode" not in st.session_state:
+        st.session_state["theme_mode"] = "Light"
+
+    with st.sidebar:
+        st.markdown(
+            "<div style='margin-top:1rem; margin-bottom:0.25rem; "
+            "font-size:0.7rem; font-weight:600; text-transform:uppercase; "
+            "letter-spacing:0.04em; opacity:0.65;'>Appearance</div>",
+            unsafe_allow_html=True,
+        )
+        chosen = st.radio(
+            "Theme",
+            options=["☀️ Light", "🌙 Dark"],
+            index=0 if st.session_state["theme_mode"] == "Light" else 1,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="_blitz_theme_radio",
+        )
+
+    mode = "Dark" if "Dark" in chosen else "Light"
+    st.session_state["theme_mode"] = mode
+    return mode
+
+
+def apply_chart_theme(fig: go.Figure) -> go.Figure:
+    """Apply consistent Plotly defaults to any figure.
+
+    Transparent background (so it picks up the page theme), unified hover,
+    horizontal legend at top-right, no gridlines on x, soft gridlines on y,
+    tabular-num font. Pages opt in by wrapping their figure:
+
+        fig = apply_chart_theme(my_fig)
+        st.plotly_chart(fig, use_container_width=True)
+
+    Returns the same fig (modified in place) for chaining.
+    """
+    fig.update_layout(
+        font=dict(
+            family='-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
+            size=12,
+        ),
+        margin=dict(l=10, r=10, t=44, b=10),
+        hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom", y=1.02,
+            xanchor="right", x=1,
+        ),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    fig.update_xaxes(showgrid=False, zeroline=False)
+    fig.update_yaxes(gridcolor="rgba(120,120,120,0.15)", zeroline=False)
+    return fig
+

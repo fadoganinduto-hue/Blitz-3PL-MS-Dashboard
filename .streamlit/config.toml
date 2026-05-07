@@ -1,0 +1,15 @@
+[theme]
+# Lane 2A — clean ops-dashboard palette.
+# User can flip to dark via Streamlit's settings menu (☰ top-right → Settings → Theme).
+primaryColor             = "#1570ef"
+backgroundColor          = "#ffffff"
+secondaryBackgroundColor = "#f7f8fa"
+textColor                = "#101828"
+font                     = "sans serif"
+base                     = "light"
+
+[server]
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false
