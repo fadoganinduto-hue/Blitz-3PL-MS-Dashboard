@@ -13,3 +13,9 @@ maxUploadSize = 50
 
 [browser]
 gatherUsageStats = false
+
+[client]
+# Stream the actual ImportError/Traceback in the browser instead of the
+# redacted "data leaks" wrapper. Safe here because the app is gated behind
+# Streamlit Cloud's auth — only authorized viewers can see errors.
+showErrorDetails = "full"
