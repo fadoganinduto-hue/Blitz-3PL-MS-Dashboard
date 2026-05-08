@@ -675,8 +675,17 @@ def render_theme_toggle() -> str:
 # because '5' < '6').
 
 def idr_col(label: str = "Amount"):
-    """Column config for an IDR column. Compact format (1.2M, 23B), sortable."""
-    return st.column_config.NumberColumn(label, format="compact")
+    """Column config for an IDR column.
+
+    Renders full digits with locale-aware thousand separators (e.g.
+    "136,123,456") instead of the abbreviated "compact" form ("136M").
+    Auto-tags the column header with "(Rp)" so the currency unit stays
+    visible without losing sort behaviour — pre-formatting strings would
+    have broken numeric sort.
+    """
+    if "(Rp)" not in label:
+        label = f"{label} (Rp)"
+    return st.column_config.NumberColumn(label, format="localized")
 
 
 def vol_col(label: str = "Volume"):
