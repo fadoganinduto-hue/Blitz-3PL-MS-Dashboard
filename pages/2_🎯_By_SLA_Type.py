@@ -12,7 +12,7 @@ from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
                    pop_pct, pop_label, build_trend, apply_chart_theme,
-                   idr_col, vol_col, pct_col)
+                   idr_col, vol_col, pct_col, dataframe_with_freeze)
 from data_loader import COST_COMPONENTS
 
 st.set_page_config(page_title="By SLA Type | Blitz", page_icon="🎯", layout="wide")
@@ -94,8 +94,10 @@ lw['GP Margin %'] = np.where(lw['Revenue'] != 0, lw['GP'] / lw['Revenue'] * 100,
 lw[f'GP {pop} %'] = lw.apply(lambda r: pop_pct(r['GP'], r['GP_prev']), axis=1)
 lw = lw.sort_values('GP', ascending=False).reset_index(drop=True)
 
-st.dataframe(
+dataframe_with_freeze(
     lw[['SLA Type', 'Clients', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %', f'GP {pop} %']],
+    key="sla_snapshot",
+    default_freeze=['SLA Type'],
     column_config={
         'Clients':     vol_col('Clients'),
         'Volume':      vol_col('Volume'),
@@ -130,8 +132,10 @@ sla_agg['GP Margin %'] = np.where(
 )
 sla_agg = sla_agg.sort_values(sort_col, ascending=False).reset_index(drop=True)
 
-st.dataframe(
+dataframe_with_freeze(
     sla_agg[['SLA Type', 'Clients', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+    key="sla_rankings",
+    default_freeze=['SLA Type'],
     column_config={
         'Clients':     vol_col('Clients'),
         'Volume':      vol_col('Volume'),
@@ -154,6 +158,84 @@ fig_rank = px.bar(
 fig_rank.update_layout(xaxis_tickangle=-15)
 apply_chart_theme(fig_rank)
 st.plotly_chart(fig_rank, width="stretch")
+
+st.divider()
+
+# ── SLA performance for a selected client subset ─────────────────────────────
+st.subheader("SLA Performance for Selected Clients")
+st.caption("Pick one or more clients to see how their volume and P&L split across SLA tiers.")
+
+all_clients = sorted(df['Client Name'].dropna().unique().tolist())
+sel_clients = st.multiselect(
+    "Clients", all_clients, default=[],
+    key="sla_clients_filter",
+    placeholder="Select one or more clients…",
+)
+
+if not sel_clients:
+    st.info("Select at least one client above to see the SLA-type breakdown.")
+else:
+    cdf = df[df['Client Name'].isin(sel_clients)].copy()
+    if cdf.empty:
+        st.warning("No data for the selected client(s) under current filters.")
+    else:
+        s1, s2, s3, s4, s5 = st.columns(5)
+        s1.metric("Revenue", fmt_idr(cdf['Total Revenue'].sum()))
+        s2.metric("Cost",    fmt_idr(cdf['Total Cost'].sum()))
+        s3.metric("GP",      fmt_idr(cdf['GP'].sum()))
+        cmargin = cdf['GP'].sum() / cdf['Total Revenue'].sum() * 100 if cdf['Total Revenue'].sum() else 0
+        s4.metric("Margin",  fmt_pct(cmargin))
+        s5.metric("Volume",  fmt_vol(cdf['Delivery Volume'].sum()))
+
+        st.markdown("#### SLA-Type Rankings")
+        sla_c = (
+            cdf.groupby('SLA Type', observed=True)
+            .agg(
+                Volume=('Delivery Volume', 'sum'),
+                Revenue=('Total Revenue', 'sum'),
+                Cost=('Total Cost', 'sum'),
+                GP=('GP', 'sum'),
+            )
+            .reset_index()
+        )
+        sla_c['GP Margin %'] = np.where(
+            sla_c['Revenue'] != 0, sla_c['GP'] / sla_c['Revenue'] * 100, 0
+        )
+        sla_c = sla_c.sort_values('GP', ascending=False).reset_index(drop=True)
+
+        dataframe_with_freeze(
+            sla_c[['SLA Type', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+            key="sla_client_subset",
+            default_freeze=['SLA Type'],
+            column_config={
+                'Volume':      vol_col('Volume'),
+                'Revenue':     idr_col('Revenue'),
+                'Cost':        idr_col('Cost'),
+                'GP':          idr_col('GP'),
+                'GP Margin %': pct_col('Margin', signed=False),
+            },
+            width="stretch", hide_index=True,
+        )
+
+        st.markdown(f"#### {view_mode} Trend by SLA Type")
+        trend_c = build_trend(cdf, ['SLA Type'], view_mode)
+        tab_gp, tab_vol = st.tabs(["GP", "Volume"])
+        with tab_gp:
+            fig_gp = px.bar(
+                trend_c, x='Label', y='GP', color='SLA Type',
+                height=380, labels={'GP': 'GP (IDR)', 'Label': 'Period'},
+            )
+            fig_gp.update_layout(barmode='stack', xaxis_tickangle=-45)
+            apply_chart_theme(fig_gp)
+            st.plotly_chart(fig_gp, width="stretch")
+        with tab_vol:
+            fig_v = px.bar(
+                trend_c, x='Label', y='Volume', color='SLA Type',
+                height=380, labels={'Volume': 'Deliveries', 'Label': 'Period'},
+            )
+            fig_v.update_layout(barmode='stack', xaxis_tickangle=-45)
+            apply_chart_theme(fig_v)
+            st.plotly_chart(fig_v, width="stretch")
 
 st.divider()
 
@@ -190,8 +272,10 @@ client_in_sla['Margin %'] = np.where(
 )
 client_in_sla = client_in_sla.sort_values('GP', ascending=False)
 
-st.dataframe(
+dataframe_with_freeze(
     client_in_sla[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'Margin %']],
+    key="sla_client_in_sla",
+    default_freeze=['Client Name'],
     column_config={
         'Volume':   vol_col('Volume'),
         'Revenue':  idr_col('Revenue'),
@@ -223,9 +307,11 @@ fig.update_layout(barmode='group', height=400, yaxis_title='IDR',
 apply_chart_theme(fig)
 st.plotly_chart(fig, width="stretch")
 
-st.dataframe(
+dataframe_with_freeze(
     trend_s[['Label', 'Volume', 'Volume PoP%', 'Revenue', 'Revenue PoP%',
              'Cost', 'GP', 'GP PoP%', 'GP Margin %']],
+    key="sla_drilldown_trend",
+    default_freeze=['Label'],
     column_config={
         'Label':        st.column_config.TextColumn('Period'),
         'Volume':       vol_col('Volume'),

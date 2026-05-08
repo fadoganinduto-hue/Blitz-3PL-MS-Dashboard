@@ -4,7 +4,8 @@ import plotly.express as px
 from utils import (require_mobile_data, fmt_idr, fmt_vol,
                    get_available_periods, filter_period, prev_period_info,
                    pop_pct, pop_label, build_mobile_trend,
-                   apply_chart_theme, idr_col, vol_col, pct_col)
+                   apply_chart_theme, idr_col, vol_col, pct_col,
+                   dataframe_with_freeze)
 from data_loader import mobile_aggregate
 
 st.set_page_config(page_title="Mobile By Team | Blitz", page_icon="🏙️", layout="wide")
@@ -44,14 +45,20 @@ else:
     merged = agg_curr.copy()
     merged['PoP%'] = None
 
-display = merged.rename(columns={'Blitz Team': 'Team', 'Total Cups Sold': 'Cups',
-                                  'Profit Calc': 'Profit'}).copy()
+# Select-then-rename to avoid collision: mobile_aggregate sums the source
+# 'Profit' column, which clashes with renaming 'Profit Calc' → 'Profit'.
+display = merged[['Blitz Team', 'Total Cups Sold', 'Blitz Revenue',
+                  'Profit Calc', 'PoP%']].rename(
+    columns={'Blitz Team': 'Team', 'Total Cups Sold': 'Cups', 'Profit Calc': 'Profit'}
+).copy()
 display['# Clients'] = merged['Blitz Team'].apply(
     lambda t: df_full[df_full['Blitz Team'] == t]['Client Name'].nunique()
 ).values
 
-st.dataframe(
+dataframe_with_freeze(
     display[['Team', '# Clients', 'Cups', 'Blitz Revenue', 'Profit', 'PoP%']].sort_values('Team'),
+    key="mobile_team_summary",
+    default_freeze=['Team'],
     column_config={
         '# Clients':      vol_col('# Clients'),
         'Cups':           vol_col('Cups'),
@@ -111,7 +118,12 @@ for team in teams:
 
     with st.expander(f"🏙️ {team} — {len(client_agg)} clients", expanded=True):
         pop_col = f'Profit {pop_lbl}%'
-        display_cl = client_agg.rename(columns={
+        # Select-then-rename so the source 'Profit' column doesn't collide with
+        # the 'Profit Calc' → 'Profit' rename.
+        src_cols = [c for c in ['Client Name', 'Total Cups Sold', 'Total Active Riders',
+                                'Blitz Revenue', 'Profit Calc', pop_col]
+                    if c in client_agg.columns]
+        display_cl = client_agg[src_cols].rename(columns={
             'Total Cups Sold': 'Cups',
             'Total Active Riders': 'Riders',
             'Blitz Revenue': 'Blitz Rev',
@@ -119,8 +131,10 @@ for team in teams:
         }).copy()
         show_cols = [c for c in ['Client Name', 'Cups', 'Riders', 'Blitz Rev', 'Profit', pop_col]
                      if c in display_cl.columns]
-        st.dataframe(
+        dataframe_with_freeze(
             display_cl[show_cols],
+            key=f"mobile_team_clients_{team}",
+            default_freeze=['Client Name'],
             column_config={
                 'Cups':       vol_col('Cups'),
                 'Riders':     vol_col('Riders'),

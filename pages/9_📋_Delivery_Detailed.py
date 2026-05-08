@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
-                   get_available_periods, MONTH_ORDER)
+                   get_available_periods, MONTH_ORDER, dataframe_with_freeze)
 from data_loader import REVENUE_COLS, COST_COLS
 
 st.set_page_config(page_title="Delivery Detailed | Blitz", page_icon="📋", layout="wide")
@@ -138,9 +138,11 @@ for c in display_cols:
     else:
         format_dict[c] = 'Rp {:,.0f}'
 
-st.dataframe(
+dataframe_with_freeze(
     result.style.format(format_dict, na_rep='-'),
-    use_container_width=True, hide_index=True, height=600
+    key="del_detail_pivot",
+    default_freeze=['Period'],
+    use_container_width=True, hide_index=True, height=600,
 )
 
 # ── PoP % Change table ───────────────────────────────────────────────────────
@@ -167,10 +169,12 @@ def color_pop(val):
         return 'color: red'
     return ''
 
-st.dataframe(
+dataframe_with_freeze(
     pop_display.style.format({c: '{:+.1f}%' for c in pop_display.columns if '%Δ' in c}, na_rep='—')
                      .map(color_pop, subset=[c for c in pop_display.columns if '%Δ' in c]),
-    use_container_width=True, hide_index=True
+    key="del_detail_pop",
+    default_freeze=['Period'],
+    use_container_width=True, hide_index=True,
 )
 
 # ── Download button ───────────────────────────────────────────────────────────

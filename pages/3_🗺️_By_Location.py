@@ -7,7 +7,8 @@ from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
                    pop_pct, pop_label, build_trend,
-                   apply_chart_theme, idr_col, vol_col, pct_col)
+                   apply_chart_theme, idr_col, vol_col, pct_col,
+                   dataframe_with_freeze)
 
 st.set_page_config(page_title="By Location | Blitz", page_icon="🗺️", layout="wide")
 st.title("🗺️ By Location")
@@ -56,8 +57,10 @@ lw_loc = curr_loc.merge(prev_loc, on='Client Location', how='left').fillna(0)
 lw_loc[f'GP {pop} %'] = lw_loc.apply(lambda r: pop_pct(r['GP'], r['GP_prev']), axis=1)
 lw_loc = lw_loc.sort_values('GP', ascending=False)
 
-st.dataframe(
+dataframe_with_freeze(
     lw_loc[['Client Location', 'Volume', 'Revenue', 'GP', f'GP {pop} %']],
+    key="location_snapshot",
+    default_freeze=['Client Location'],
     column_config={
         'Volume':       vol_col('Volume'),
         'Revenue':      idr_col('Revenue'),
@@ -93,8 +96,10 @@ fig_rank.update_coloraxes(showscale=False)
 apply_chart_theme(fig_rank)
 st.plotly_chart(fig_rank, width="stretch")
 
-st.dataframe(
+dataframe_with_freeze(
     loc_agg[['Client Location', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+    key="location_rankings",
+    default_freeze=['Client Location'],
     column_config={
         'Volume':      vol_col('Volume'),
         'Revenue':     idr_col('Revenue'),
@@ -136,9 +141,11 @@ fig_l.update_layout(barmode='group', height=400, yaxis_title='IDR',
 apply_chart_theme(fig_l)
 st.plotly_chart(fig_l, width="stretch")
 
-st.dataframe(
+dataframe_with_freeze(
     trend_l[['Label', 'Volume', 'Volume PoP%', 'Revenue', 'Revenue PoP%',
              'Cost', 'GP', 'GP PoP%']],
+    key="location_drilldown_trend",
+    default_freeze=['Label'],
     column_config={
         'Label':        st.column_config.TextColumn('Period'),
         'Volume':       vol_col('Volume'),

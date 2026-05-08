@@ -7,7 +7,8 @@ from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
                    pop_pct, pop_label, build_trend,
-                   apply_chart_theme, idr_col, vol_col, pct_col)
+                   apply_chart_theme, idr_col, vol_col, pct_col,
+                   dataframe_with_freeze)
 from data_loader import COST_COMPONENTS
 
 st.set_page_config(page_title="By Team | Blitz", page_icon="🏙️", layout="wide")
@@ -110,8 +111,10 @@ for team in teams:
         })
 if pop_rows:
     pop_df = pd.DataFrame(pop_rows)
-    st.dataframe(
+    dataframe_with_freeze(
         pop_df,
+        key="team_pop",
+        default_freeze=['Team'],
         column_config={
             f'GP {pop}%':  pct_col(f'GP {pop}%', signed=True),
             f'Rev {pop}%': pct_col(f'Rev {pop}%', signed=True),
@@ -209,8 +212,10 @@ for team in teams:
 
     with st.expander(f"🏙️ {team} — {len(client_agg)} clients", expanded=True):
         pop_col = f'GP {pop}%'
-        st.dataframe(
+        dataframe_with_freeze(
             client_agg[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %', pop_col]],
+            key=f"team_clients_{team}",
+            default_freeze=['Client Name'],
             column_config={
                 'Volume':      vol_col('Volume'),
                 'Revenue':     idr_col('Revenue'),

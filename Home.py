@@ -129,6 +129,7 @@ PAGES = {
         st.Page("pages/10_📱_Mobile_Overview.py",            title="Overview",           icon="📱"),
         st.Page("pages/11_📅_Mobile_Period_Performance.py",  title="Period Performance", icon="📅"),
         st.Page("pages/12_👥_Mobile_By_Client.py",           title="By Client",          icon="👥"),
+        st.Page("pages/13_🏗️_Mobile_By_Project.py",          title="By Project",         icon="🏗️"),
         st.Page("pages/13_🗺️_Mobile_By_Location.py",         title="By Location",        icon="🗺️"),
         st.Page("pages/14_🏙️_Mobile_By_Team.py",             title="By Team",            icon="🏙️"),
         st.Page("pages/15_🔬_Mobile_Deep_Dive.py",           title="Deep Dive",          icon="🔬"),

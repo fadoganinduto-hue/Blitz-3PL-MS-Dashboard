@@ -5,7 +5,8 @@ from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
                    pop_pct, pop_label, build_mobile_trend,
-                   apply_chart_theme, idr_col, vol_col, pct_col)
+                   apply_chart_theme, idr_col, vol_col, pct_col,
+                   dataframe_with_freeze)
 from data_loader import mobile_aggregate
 
 st.set_page_config(page_title="Mobile By Client | Blitz", page_icon="👥", layout="wide")
@@ -62,8 +63,10 @@ display = merged[['Client Name', 'Total Cups Sold', 'Total Active Riders',
 display.columns = ['Client', 'Cups', 'Riders', 'Cups/Driver', 'Rev/Driver',
                    'Gross Revenue', 'Blitz Revenue', 'Profit', 'PoP%']
 
-st.dataframe(
+dataframe_with_freeze(
     display.sort_values('Profit', ascending=False),
+    key="mobile_client_rankings",
+    default_freeze=['Client'],
     column_config={
         'Cups':           vol_col('Cups'),
         'Riders':         vol_col('Riders'),

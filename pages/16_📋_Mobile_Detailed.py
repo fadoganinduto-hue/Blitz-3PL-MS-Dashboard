@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
-                   get_available_periods, MONTH_ORDER)
+                   get_available_periods, MONTH_ORDER, dataframe_with_freeze)
 from data_loader import MOBILE_REVENUE_COLS, MOBILE_COST_COLS, MOBILE_OPS_COLS, mobile_aggregate
 
 st.set_page_config(page_title="Mobile Detailed | Blitz", page_icon="📋", layout="wide")
@@ -155,9 +155,11 @@ for c in display_cols:
     else:
         format_dict[c] = 'Rp {:,.0f}'
 
-st.dataframe(
+dataframe_with_freeze(
     result.style.format(format_dict, na_rep='-'),
-    width="stretch", hide_index=True, height=600
+    key="mobile_detail_pivot",
+    default_freeze=['Period'],
+    width="stretch", hide_index=True, height=600,
 )
 
 # ── PoP % Change ──────────────────────────────────────────────────────────────
@@ -179,10 +181,12 @@ def color_pop(val):
         return ''
     return 'color: green' if val > 0 else 'color: red' if val < 0 else ''
 
-st.dataframe(
+dataframe_with_freeze(
     pop_display.style.format({c: '{:+.1f}%' for c in pop_display.columns if '%Δ' in c}, na_rep='—')
                      .map(color_pop, subset=[c for c in pop_display.columns if '%Δ' in c]),
-    width="stretch", hide_index=True
+    key="mobile_detail_pop",
+    default_freeze=['Period'],
+    width="stretch", hide_index=True,
 )
 
 # ── Download ──────────────────────────────────────────────────────────────────

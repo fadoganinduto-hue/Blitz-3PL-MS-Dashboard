@@ -7,7 +7,7 @@ from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
                    pop_pct, pop_label, build_trend,
-                   apply_chart_theme)
+                   apply_chart_theme, dataframe_with_freeze)
 
 st.set_page_config(page_title="Overview | Blitz", page_icon="📊", layout="wide")
 st.title("📊 Overview")
@@ -132,9 +132,11 @@ disp['Cost']     = disp['Cost'].apply(fmt_idr)
 disp['GP']       = disp['GP'].apply(fmt_idr)
 disp['Volume']   = disp['Volume'].apply(fmt_vol)
 
-st.dataframe(
+dataframe_with_freeze(
     disp[['Label', 'Revenue', 'Rev PoP%', 'Cost', 'GP', 'GP PoP%', 'Margin', 'Volume', 'Vol PoP%']]
     .rename(columns={'Label': 'Period'}),
+    key="overview_summary",
+    default_freeze=['Period'],
     width="stretch", hide_index=True
 )
 

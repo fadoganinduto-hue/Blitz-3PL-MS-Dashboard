@@ -605,6 +605,53 @@ def pct_col(label: str = "Margin", signed: bool = False):
     return st.column_config.NumberColumn(label, format=fmt)
 
 
+def dataframe_with_freeze(
+    df: pd.DataFrame,
+    *,
+    key: str,
+    column_config: dict | None = None,
+    default_freeze: list[str] | None = None,
+    freeze_label: str = "🔒 Freeze columns",
+    **dataframe_kwargs,
+) -> None:
+    """Render a small 'Freeze columns' picker + an `st.dataframe` with pinning applied.
+
+    The picker is collapsed inside an expander so narrow tables stay tidy. Pinned
+    columns stay visible while the user scrolls horizontally — same effect as
+    Excel's freeze pane, on the column axis.
+
+    Parameters mirror `st.dataframe` — pass `column_config`, `width`, `height`,
+    `hide_index`, etc. as you normally would. `key` must be unique per table on
+    a page (used to namespace the multiselect's session state).
+
+    Streamlit column_config objects are plain dicts internally, so we apply
+    `pinned=True` by mutating a clone — preserving the caller's existing
+    formatting (NumberColumn format, alignment, etc.).
+    """
+    # df may be a pandas DataFrame or a Styler (used by Detailed pages for
+    # color-coded PoP%). Stylers expose the underlying frame as `.data`.
+    data_obj = df.data if hasattr(df, "data") and hasattr(df.data, "columns") else df
+    columns = list(data_obj.columns)
+    default = [c for c in (default_freeze or []) if c in columns]
+    with st.expander(freeze_label, expanded=False):
+        frozen = st.multiselect(
+            "Pinned columns stay visible while you scroll horizontally.",
+            options=columns,
+            default=default,
+            key=f"freeze_{key}",
+            label_visibility="collapsed",
+        )
+    cfg = {}
+    for k, v in (column_config or {}).items():
+        cfg[k] = dict(v) if isinstance(v, dict) else v
+    for col in frozen:
+        if col in cfg:
+            cfg[col]["pinned"] = True
+        else:
+            cfg[col] = st.column_config.Column(col, pinned=True)
+    st.dataframe(df, column_config=cfg, **dataframe_kwargs)
+
+
 def apply_chart_theme(fig: go.Figure) -> go.Figure:
     """Apply consistent Plotly defaults to any figure.
 

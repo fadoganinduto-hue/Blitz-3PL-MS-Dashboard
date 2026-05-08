@@ -4,7 +4,8 @@ import plotly.express as px
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
                    C_GP, get_available_periods, filter_period, prev_period_info,
                    pop_pct, pop_label,
-                   apply_chart_theme, idr_col, vol_col, pct_col)
+                   apply_chart_theme, idr_col, vol_col, pct_col,
+                   dataframe_with_freeze)
 from data_loader import mobile_aggregate
 
 st.set_page_config(page_title="Mobile By Location | Blitz", page_icon="🗺️", layout="wide")
@@ -49,9 +50,11 @@ display.columns = ['Location', 'Cups', 'Blitz Revenue', 'Profit', 'Riders', 'PoP
 
 display['Margin %'] = (merged['Profit Calc'] / merged['Gross Revenue'].replace(0, 1) * 100).fillna(0)
 
-st.dataframe(
+dataframe_with_freeze(
     display[['Location', 'Cups', 'Riders', 'Blitz Revenue', 'Profit', 'Margin %', 'PoP%']]
     .sort_values('Profit', ascending=False),
+    key="mobile_location_rankings",
+    default_freeze=['Location'],
     column_config={
         'Cups':           vol_col('Cups'),
         'Riders':         vol_col('Riders'),

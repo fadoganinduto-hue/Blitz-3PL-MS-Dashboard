@@ -5,7 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
-                   get_available_periods, filter_period, pop_pct, pop_label)
+                   get_available_periods, filter_period, pop_pct, pop_label,
+                   dataframe_with_freeze)
 from data_loader import REVENUE_COLS, COST_COLS, COST_COMPONENTS
 
 st.set_page_config(page_title="Deep Dive | Blitz", page_icon="🔬", layout="wide")
@@ -166,7 +167,12 @@ for col in rev_cols_present:
 if rev_rows:
     rev_df = pd.DataFrame(rev_rows)
     # Highlight Total Revenue row
-    st.dataframe(rev_df, use_container_width=True, hide_index=True)
+    dataframe_with_freeze(
+        rev_df,
+        key="dd_revenue",
+        default_freeze=['Line Item'],
+        use_container_width=True, hide_index=True,
+    )
 
     # Visual: side-by-side bar per revenue component (excluding totals)
     plot_cols = [c for c in rev_cols_present if c != 'Total Revenue' and
@@ -213,7 +219,12 @@ for col in cost_cols_present:
 
 if cost_rows:
     cost_df_disp = pd.DataFrame(cost_rows)
-    st.dataframe(cost_df_disp, use_container_width=True, hide_index=True)
+    dataframe_with_freeze(
+        cost_df_disp,
+        key="dd_cost",
+        default_freeze=['Line Item'],
+        use_container_width=True, hide_index=True,
+    )
 
     # Visual: side-by-side bar per cost component (excluding total)
     plot_cost_cols = [c for c in cost_cols_present if c != 'Total Cost' and
@@ -381,5 +392,10 @@ else:
     remaining = [c for c in raw_show.columns if c not in ordered]
     raw_show = raw_show[ordered + remaining]
 
-    st.dataframe(raw_show, use_container_width=True, hide_index=True, height=500)
+    dataframe_with_freeze(
+        raw_show,
+        key="dd_raw",
+        default_freeze=['Client Name'],
+        use_container_width=True, hide_index=True, height=500,
+    )
     st.caption(f"{len(raw_show):,} rows · {len(raw_show.columns)} columns")

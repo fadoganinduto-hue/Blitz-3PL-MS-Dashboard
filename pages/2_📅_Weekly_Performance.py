@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label)
+                   pop_pct, pop_label, dataframe_with_freeze)
 
 st.set_page_config(page_title="Period Performance | Blitz", page_icon="📅", layout="wide")
 st.title("📅 Period Performance")
@@ -182,7 +182,12 @@ with tab1:
         rows.append(row)
 
     disp_df = pd.DataFrame(rows)
-    st.dataframe(disp_df, use_container_width=True, hide_index=True, height=520)
+    dataframe_with_freeze(
+        disp_df,
+        key="pp_side_by_side",
+        default_freeze=['Client'],
+        use_container_width=True, hide_index=True, height=520,
+    )
 
     st.markdown("---")
 
@@ -349,8 +354,10 @@ with tab3:
     disp_c['GP PoP%']  = disp_c['GP PoP%'].apply(fmt_pop_plain)
     disp_c['Vol PoP%'] = disp_c['Volume PoP%'].apply(fmt_pop_plain)
 
-    st.dataframe(
+    dataframe_with_freeze(
         disp_c[['Label', 'Volume', 'Vol PoP%', 'Revenue', 'Rev PoP%',
                 'Cost', 'GP', 'GP PoP%', 'Margin']],
-        use_container_width=True, hide_index=True
+        key="pp_client_history",
+        default_freeze=['Label'],
+        use_container_width=True, hide_index=True,
     )

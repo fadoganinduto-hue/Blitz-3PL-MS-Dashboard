@@ -7,7 +7,8 @@ from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
                    pop_pct, pop_label, build_trend,
-                   apply_chart_theme, idr_col, vol_col, pct_col)
+                   apply_chart_theme, idr_col, vol_col, pct_col,
+                   dataframe_with_freeze)
 from data_loader import COST_COMPONENTS
 
 st.set_page_config(page_title="By Client | Blitz", page_icon="👥", layout="wide")
@@ -63,8 +64,10 @@ lw['GP Margin %'] = np.where(lw['Revenue'] != 0, lw['GP'] / lw['Revenue'] * 100,
 lw[f'GP {pop} %'] = lw.apply(lambda r: pop_pct(r['GP'], r['GP_prev']), axis=1)
 lw = lw.sort_values('GP', ascending=False).reset_index(drop=True)
 
-st.dataframe(
+dataframe_with_freeze(
     lw[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %', f'GP {pop} %']],
+    key="client_snapshot",
+    default_freeze=['Client Name'],
     column_config={
         'Volume':         vol_col('Volume'),
         'Revenue':        idr_col('Revenue'),
@@ -93,8 +96,10 @@ client_agg['GP Margin %'] = np.where(
 )
 client_agg = client_agg.sort_values(sort_col, ascending=False).reset_index(drop=True)
 
-st.dataframe(
+dataframe_with_freeze(
     client_agg[['Client Name', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+    key="client_rankings",
+    default_freeze=['Client Name'],
     column_config={
         'Volume':      vol_col('Volume'),
         'Revenue':     idr_col('Revenue'),
@@ -142,9 +147,11 @@ fig.update_layout(barmode='group', height=400, yaxis_title='IDR',
 apply_chart_theme(fig)
 st.plotly_chart(fig, width="stretch")
 
-st.dataframe(
+dataframe_with_freeze(
     trend_c[['Label', 'Volume', 'Volume PoP%', 'Revenue', 'Revenue PoP%',
              'Cost', 'GP', 'GP PoP%', 'GP Margin %']],
+    key="client_drilldown_trend",
+    default_freeze=['Label'],
     column_config={
         'Label':        st.column_config.TextColumn('Period'),
         'Volume':       vol_col('Volume'),

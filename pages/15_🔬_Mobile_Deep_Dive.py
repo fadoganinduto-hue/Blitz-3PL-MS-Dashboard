@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
-                   get_available_periods, filter_period, pop_pct, pop_label)
+                   get_available_periods, filter_period, pop_pct, pop_label,
+                   dataframe_with_freeze)
 from data_loader import MOBILE_REVENUE_COLS, MOBILE_COST_COLS
 
 st.set_page_config(page_title="Mobile Deep Dive | Blitz", page_icon="🔬", layout="wide")
@@ -162,7 +163,12 @@ for col in rev_cols_present:
 
 if rev_rows:
     rev_df = pd.DataFrame(rev_rows)
-    st.dataframe(rev_df, use_container_width=True, hide_index=True)
+    dataframe_with_freeze(
+        rev_df,
+        key="mobile_dd_revenue",
+        default_freeze=['Line Item'],
+        use_container_width=True, hide_index=True,
+    )
 
 st.divider()
 
@@ -186,7 +192,12 @@ for col in cost_cols_present:
 
 if cost_rows:
     cost_df = pd.DataFrame(cost_rows)
-    st.dataframe(cost_df, use_container_width=True, hide_index=True)
+    dataframe_with_freeze(
+        cost_df,
+        key="mobile_dd_cost",
+        default_freeze=['Line Item'],
+        use_container_width=True, hide_index=True,
+    )
 
 st.divider()
 
@@ -321,5 +332,10 @@ else:
     remaining = [c for c in raw_show.columns if c not in ordered]
     raw_show = raw_show[ordered + remaining]
 
-    st.dataframe(raw_show, use_container_width=True, hide_index=True, height=500)
+    dataframe_with_freeze(
+        raw_show,
+        key="mobile_dd_raw",
+        default_freeze=['Client Name'],
+        use_container_width=True, hide_index=True, height=500,
+    )
     st.caption(f"{len(raw_show):,} rows · {len(raw_show.columns)} columns")

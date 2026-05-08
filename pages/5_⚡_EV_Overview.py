@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 from utils import (require_data, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, apply_chart_theme)
+                   pop_pct, pop_label, apply_chart_theme, dataframe_with_freeze)
 from data_loader import COST_COMPONENTS
 
 st.set_page_config(page_title="EV Overview | Blitz", page_icon="⚡", layout="wide")
@@ -283,7 +283,12 @@ with tab_b2b:
 
         show_cols = ['Client Name', 'Type'] + ev_metrics + ['Revenue', 'Cost', 'GP_fmt', 'Volume', 'Margin']
         show_cols = [c for c in show_cols if c in disp.columns]
-        st.dataframe(disp[show_cols], width="stretch", hide_index=True)
+        dataframe_with_freeze(
+            disp[show_cols],
+            key="ev_b2b_per_client",
+            default_freeze=['Client Name'],
+            width="stretch", hide_index=True,
+        )
 
         # Per-client Revenue + GP bars
         fig_cl = px.bar(
