@@ -161,23 +161,23 @@ st.plotly_chart(fig_rank, width="stretch")
 
 st.divider()
 
-# ── SLA performance for a selected client subset ─────────────────────────────
-st.subheader("SLA Performance for Selected Clients")
-st.caption("Pick one or more clients to see how their volume and P&L split across SLA tiers.")
+# ── Client → SLA drilldown ───────────────────────────────────────────────────
+st.subheader("Client → SLA Drilldown")
+st.caption("Pick a client to see how their volume and P&L split across SLA tiers.")
 
 all_clients = sorted(df['Client Name'].dropna().unique().tolist())
-sel_clients = st.multiselect(
-    "Clients", all_clients, default=[],
-    key="sla_clients_filter",
-    placeholder="Select one or more clients…",
+sel_client = st.selectbox(
+    "Client", all_clients, index=None,
+    key="sla_client_drilldown",
+    placeholder="Select a client…",
 )
 
-if not sel_clients:
-    st.info("Select at least one client above to see the SLA-type breakdown.")
+if sel_client is None:
+    st.info("Select a client above to see their SLA breakdown.")
 else:
-    cdf = df[df['Client Name'].isin(sel_clients)].copy()
+    cdf = df[df['Client Name'] == sel_client].copy()
     if cdf.empty:
-        st.warning("No data for the selected client(s) under current filters.")
+        st.warning("No data for the selected client under current filters.")
     else:
         s1, s2, s3, s4, s5 = st.columns(5)
         s1.metric("Revenue", fmt_idr(cdf['Total Revenue'].sum()))
@@ -187,7 +187,7 @@ else:
         s4.metric("Margin",  fmt_pct(cmargin))
         s5.metric("Volume",  fmt_vol(cdf['Delivery Volume'].sum()))
 
-        st.markdown("#### SLA-Type Rankings")
+        st.markdown(f"#### {sel_client} — SLA Breakdown")
         sla_c = (
             cdf.groupby('SLA Type', observed=True)
             .agg(
@@ -203,39 +203,42 @@ else:
         )
         sla_c = sla_c.sort_values('GP', ascending=False).reset_index(drop=True)
 
-        dataframe_with_freeze(
-            sla_c[['SLA Type', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
-            key="sla_client_subset",
-            default_freeze=['SLA Type'],
-            column_config={
-                'Volume':      vol_col('Volume'),
-                'Revenue':     idr_col('Revenue'),
-                'Cost':        idr_col('Cost'),
-                'GP':          idr_col('GP'),
-                'GP Margin %': pct_col('Margin', signed=False),
-            },
-            width="stretch", hide_index=True,
-        )
+        if sla_c.empty:
+            st.info("This client has no SLA-Type data under the current filters.")
+        else:
+            dataframe_with_freeze(
+                sla_c[['SLA Type', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+                key="sla_client_drill_table",
+                default_freeze=['SLA Type'],
+                column_config={
+                    'Volume':      vol_col('Volume'),
+                    'Revenue':     idr_col('Revenue'),
+                    'Cost':        idr_col('Cost'),
+                    'GP':          idr_col('GP'),
+                    'GP Margin %': pct_col('Margin', signed=False),
+                },
+                width="stretch", hide_index=True,
+            )
 
-        st.markdown(f"#### {view_mode} Trend by SLA Type")
-        trend_c = build_trend(cdf, ['SLA Type'], view_mode)
-        tab_gp, tab_vol = st.tabs(["GP", "Volume"])
-        with tab_gp:
-            fig_gp = px.bar(
-                trend_c, x='Label', y='GP', color='SLA Type',
-                height=380, labels={'GP': 'GP (IDR)', 'Label': 'Period'},
-            )
-            fig_gp.update_layout(barmode='stack', xaxis_tickangle=-45)
-            apply_chart_theme(fig_gp)
-            st.plotly_chart(fig_gp, width="stretch")
-        with tab_vol:
-            fig_v = px.bar(
-                trend_c, x='Label', y='Volume', color='SLA Type',
-                height=380, labels={'Volume': 'Deliveries', 'Label': 'Period'},
-            )
-            fig_v.update_layout(barmode='stack', xaxis_tickangle=-45)
-            apply_chart_theme(fig_v)
-            st.plotly_chart(fig_v, width="stretch")
+            st.markdown(f"#### {view_mode} Trend Stacked by SLA Tier")
+            trend_c = build_trend(cdf, ['SLA Type'], view_mode)
+            tab_gp, tab_vol = st.tabs(["GP", "Volume"])
+            with tab_gp:
+                fig_gp = px.bar(
+                    trend_c, x='Label', y='GP', color='SLA Type',
+                    height=380, labels={'GP': 'GP (IDR)', 'Label': 'Period'},
+                )
+                fig_gp.update_layout(barmode='stack', xaxis_tickangle=-45)
+                apply_chart_theme(fig_gp)
+                st.plotly_chart(fig_gp, width="stretch")
+            with tab_vol:
+                fig_v = px.bar(
+                    trend_c, x='Label', y='Volume', color='SLA Type',
+                    height=380, labels={'Volume': 'Deliveries', 'Label': 'Period'},
+                )
+                fig_v.update_layout(barmode='stack', xaxis_tickangle=-45)
+                apply_chart_theme(fig_v)
+                st.plotly_chart(fig_v, width="stretch")
 
 st.divider()
 

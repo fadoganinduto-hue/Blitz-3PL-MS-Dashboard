@@ -165,6 +165,88 @@ st.plotly_chart(fig_rank, width="stretch")
 
 st.divider()
 
+# ── Client → Project drilldown ───────────────────────────────────────────────
+st.subheader("Client → Project Drilldown")
+st.caption("Pick a client to see how their cups, revenue, and profit split across projects.")
+
+all_clients_proj = sorted(df_full['Client Name'].dropna().unique().tolist())
+sel_client_proj = st.selectbox(
+    "Client", all_clients_proj, index=None,
+    key="mobile_project_client_drilldown",
+    placeholder="Select a client…",
+)
+
+if sel_client_proj is None:
+    st.info("Select a client above to see their project breakdown.")
+else:
+    cdf = df_full[df_full['Client Name'] == sel_client_proj].copy()
+    if cdf.empty:
+        st.warning("No data for the selected client.")
+    else:
+        s1, s2, s3, s4, s5 = st.columns(5)
+        s1.metric("Cups Sold",     fmt_vol(cdf['Total Cups Sold'].sum()))
+        s2.metric("Gross Revenue", fmt_idr(cdf['Gross Revenue'].sum()))
+        s3.metric("Blitz Revenue", fmt_idr(cdf['Blitz Revenue'].sum()))
+        s4.metric("Profit",        fmt_idr(cdf['Profit Calc'].sum()))
+        cmargin = cdf['Profit Calc'].sum() / cdf['Gross Revenue'].sum() * 100 if cdf['Gross Revenue'].sum() else 0
+        s5.metric("Margin",        fmt_pct(cmargin))
+
+        st.markdown(f"#### {sel_client_proj} — Project Breakdown")
+        proj_c = mobile_aggregate(cdf, ['Project'])
+        proj_c['Profit Margin %'] = np.where(
+            proj_c['Gross Revenue'] != 0,
+            proj_c['Profit Calc'] / proj_c['Gross Revenue'] * 100, 0,
+        )
+        # Select-then-rename so the source 'Profit' column doesn't collide
+        # with renaming 'Profit Calc' → 'Profit'.
+        proj_disp = proj_c[['Project', 'Total Cups Sold', 'Total Active Riders',
+                            'Gross Revenue', 'Blitz Revenue', 'Profit Calc',
+                            'Profit Margin %']].rename(
+            columns={'Total Cups Sold': 'Cups', 'Total Active Riders': 'Riders',
+                     'Profit Calc': 'Profit'}
+        )
+        proj_disp = proj_disp.sort_values('Profit', ascending=False).reset_index(drop=True)
+
+        if proj_disp.empty:
+            st.info("This client has no Project data.")
+        else:
+            dataframe_with_freeze(
+                proj_disp,
+                key="mobile_project_client_drill_table",
+                default_freeze=['Project'],
+                column_config={
+                    'Cups':            vol_col('Cups'),
+                    'Riders':          vol_col('Riders'),
+                    'Gross Revenue':   idr_col('Gross Revenue'),
+                    'Blitz Revenue':   idr_col('Blitz Revenue'),
+                    'Profit':          idr_col('Profit'),
+                    'Profit Margin %': pct_col('Margin', signed=False),
+                },
+                width="stretch", hide_index=True,
+            )
+
+            st.markdown(f"#### {view_mode} Trend Stacked by Project")
+            trend_c = build_mobile_trend(cdf, ['Project'], view_mode)
+            tab_profit, tab_cups = st.tabs(["Profit", "Cups"])
+            with tab_profit:
+                fig_p = px.bar(
+                    trend_c, x='Label', y='Profit', color='Project',
+                    height=380, labels={'Profit': 'Profit (IDR)', 'Label': 'Period'},
+                )
+                fig_p.update_layout(barmode='stack', xaxis_tickangle=-45)
+                apply_chart_theme(fig_p)
+                st.plotly_chart(fig_p, width="stretch")
+            with tab_cups:
+                fig_c = px.bar(
+                    trend_c, x='Label', y='Cups', color='Project',
+                    height=380, labels={'Cups': 'Cups Sold', 'Label': 'Period'},
+                )
+                fig_c.update_layout(barmode='stack', xaxis_tickangle=-45)
+                apply_chart_theme(fig_c)
+                st.plotly_chart(fig_c, width="stretch")
+
+st.divider()
+
 # ── Project Drilldown ────────────────────────────────────────────────────────
 st.subheader("Project Drilldown")
 sel_project = st.selectbox("Select a project", sorted(df_full['Project'].dropna().unique()))

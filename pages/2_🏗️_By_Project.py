@@ -170,6 +170,87 @@ st.plotly_chart(fig_rank, width="stretch")
 
 st.divider()
 
+# ── Client → Project drilldown ───────────────────────────────────────────────
+st.subheader("Client → Project Drilldown")
+st.caption("Pick a client to see how their volume and P&L split across projects.")
+
+all_clients_proj = sorted(df['Client Name'].dropna().unique().tolist())
+sel_client_proj = st.selectbox(
+    "Client", all_clients_proj, index=None,
+    key="project_client_drilldown",
+    placeholder="Select a client…",
+)
+
+if sel_client_proj is None:
+    st.info("Select a client above to see their project breakdown.")
+else:
+    cdf = df[df['Client Name'] == sel_client_proj].copy()
+    if cdf.empty:
+        st.warning("No data for the selected client under current filters.")
+    else:
+        s1, s2, s3, s4, s5 = st.columns(5)
+        s1.metric("Revenue", fmt_idr(cdf['Total Revenue'].sum()))
+        s2.metric("Cost",    fmt_idr(cdf['Total Cost'].sum()))
+        s3.metric("GP",      fmt_idr(cdf['GP'].sum()))
+        cmargin = cdf['GP'].sum() / cdf['Total Revenue'].sum() * 100 if cdf['Total Revenue'].sum() else 0
+        s4.metric("Margin",  fmt_pct(cmargin))
+        s5.metric("Volume",  fmt_vol(cdf['Delivery Volume'].sum()))
+
+        st.markdown(f"#### {sel_client_proj} — Project Breakdown")
+        proj_c = (
+            cdf.groupby('Project', observed=True)
+            .agg(
+                Volume=('Delivery Volume', 'sum'),
+                Revenue=('Total Revenue', 'sum'),
+                Cost=('Total Cost', 'sum'),
+                GP=('GP', 'sum'),
+            )
+            .reset_index()
+        )
+        proj_c['GP Margin %'] = np.where(
+            proj_c['Revenue'] != 0, proj_c['GP'] / proj_c['Revenue'] * 100, 0
+        )
+        proj_c = proj_c.sort_values('GP', ascending=False).reset_index(drop=True)
+
+        if proj_c.empty:
+            st.info("This client has no Project data under the current filters.")
+        else:
+            dataframe_with_freeze(
+                proj_c[['Project', 'Volume', 'Revenue', 'Cost', 'GP', 'GP Margin %']],
+                key="project_client_drill_table",
+                default_freeze=['Project'],
+                column_config={
+                    'Volume':      vol_col('Volume'),
+                    'Revenue':     idr_col('Revenue'),
+                    'Cost':        idr_col('Cost'),
+                    'GP':          idr_col('GP'),
+                    'GP Margin %': pct_col('Margin', signed=False),
+                },
+                width="stretch", hide_index=True,
+            )
+
+            st.markdown(f"#### {view_mode} Trend Stacked by Project")
+            trend_c = build_trend(cdf, ['Project'], view_mode)
+            tab_gp, tab_vol = st.tabs(["GP", "Volume"])
+            with tab_gp:
+                fig_gp = px.bar(
+                    trend_c, x='Label', y='GP', color='Project',
+                    height=380, labels={'GP': 'GP (IDR)', 'Label': 'Period'},
+                )
+                fig_gp.update_layout(barmode='stack', xaxis_tickangle=-45)
+                apply_chart_theme(fig_gp)
+                st.plotly_chart(fig_gp, width="stretch")
+            with tab_vol:
+                fig_v = px.bar(
+                    trend_c, x='Label', y='Volume', color='Project',
+                    height=380, labels={'Volume': 'Deliveries', 'Label': 'Period'},
+                )
+                fig_v.update_layout(barmode='stack', xaxis_tickangle=-45)
+                apply_chart_theme(fig_v)
+                st.plotly_chart(fig_v, width="stretch")
+
+st.divider()
+
 # ── Project Drilldown ────────────────────────────────────────────────────────
 st.subheader("Project Drilldown")
 sel_project = st.selectbox("Select a project", sorted(df['Project'].dropna().unique()))
