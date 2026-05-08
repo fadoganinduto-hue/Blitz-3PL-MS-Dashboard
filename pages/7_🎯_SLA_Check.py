@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_pct, fmt_vol,
                    C_GP, C_COST, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_label)
+                   pop_label, period_selector)
 
 st.set_page_config(page_title="SLA Check | Blitz", page_icon="🎯", layout="wide")
 st.title("🎯 SLA Check")
@@ -32,7 +32,7 @@ if df.empty:
     st.stop()
 
 # ── Period mode selector ───────────────────────────────────────────────────────
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="sla_view")
+view_mode = period_selector(page_key="sla_check")
 pop = pop_label(view_mode)
 
 periods   = get_available_periods(df, view_mode)

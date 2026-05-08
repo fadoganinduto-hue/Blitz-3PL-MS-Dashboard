@@ -12,7 +12,8 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_trend, apply_chart_theme,
+                   selected_period_df,
+                   pop_pct, pop_label, period_selector, build_trend, apply_chart_theme,
                    idr_col, vol_col, pct_col, dataframe_with_freeze)
 from data_loader import COST_COMPONENTS
 
@@ -47,7 +48,7 @@ if df.empty:
     st.stop()
 
 # ── Period mode ──────────────────────────────────────────────────────────────
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="project_view")
+view_mode = period_selector(page_key="project")
 pop = pop_label(view_mode)
 
 periods = get_available_periods(df, view_mode)
@@ -57,7 +58,7 @@ if not periods:
 
 curr_yr, curr_p, curr_lbl = periods[-1]
 prev_info = prev_period_info(periods, curr_yr, curr_p)
-curr_df = filter_period(df, view_mode, curr_yr, curr_p)
+curr_df = selected_period_df(df, view_mode, page_key="project")
 prev_df = filter_period(df, view_mode, prev_info[0], prev_info[1]) if prev_info else pd.DataFrame()
 prev_lbl = prev_info[2] if prev_info else "—"
 
@@ -170,6 +171,59 @@ st.plotly_chart(fig_rank, width="stretch")
 
 st.divider()
 
+# ── Per-Client-Per-Project matrix ────────────────────────────────────────────
+st.subheader("Per-Client-Per-Project Breakdown")
+st.caption("Every (client, project) pair across the filtered period. "
+           "Use the search box to narrow down.")
+
+cp_agg = (
+    df.groupby(['Client Name', 'Project'], observed=True)
+    .agg(
+        Volume=('Delivery Volume', 'sum'),
+        Revenue=('Total Revenue', 'sum'),
+        Cost=('Total Cost', 'sum'),
+        GP=('GP', 'sum'),
+    )
+    .reset_index()
+)
+cp_agg['Margin %'] = np.where(
+    cp_agg['Revenue'] != 0, cp_agg['GP'] / cp_agg['Revenue'] * 100, 0
+)
+cp_agg = cp_agg.sort_values('GP', ascending=False).reset_index(drop=True)
+
+cp_search = st.text_input(
+    "Filter by client or project name", "",
+    key="project_cp_filter",
+    placeholder="e.g. JNT, last-mile, …",
+)
+if cp_search:
+    mask = (
+        cp_agg['Client Name'].str.contains(cp_search, case=False, na=False)
+        | cp_agg['Project'].str.contains(cp_search, case=False, na=False)
+    )
+    cp_view = cp_agg[mask]
+else:
+    cp_view = cp_agg
+
+if cp_view.empty:
+    st.info("No (client, project) pairs match the search.")
+else:
+    dataframe_with_freeze(
+        cp_view[['Client Name', 'Project', 'Volume', 'Revenue', 'Cost', 'GP', 'Margin %']],
+        key="project_client_project_matrix",
+        default_freeze=['Client Name', 'Project'],
+        column_config={
+            'Volume':   vol_col('Volume'),
+            'Revenue':  idr_col('Revenue'),
+            'Cost':     idr_col('Cost'),
+            'GP':       idr_col('GP'),
+            'Margin %': pct_col('Margin', signed=False),
+        },
+        width="stretch", hide_index=True, height=420,
+    )
+
+st.divider()
+
 # ── Client → Project drilldown ───────────────────────────────────────────────
 st.subheader("Client → Project Drilldown")
 st.caption("Pick a client to see how their volume and P&L split across projects.")
@@ -253,11 +307,35 @@ st.divider()
 
 # ── Project Drilldown ────────────────────────────────────────────────────────
 st.subheader("Project Drilldown")
-sel_project = st.selectbox("Select a project", sorted(df['Project'].dropna().unique()))
+dd_left, dd_right = st.columns([2, 2])
+with dd_left:
+    sel_project = st.selectbox("Select a project", sorted(df['Project'].dropna().unique()))
+# Offer only dimensions that actually exist in the filtered slice
+_deeper_choices = [c for c in ['Client Location', 'Blitz Team', 'SLA Type', 'Client Level']
+                   if c in df.columns]
+with dd_right:
+    deeper_dim = st.selectbox(
+        "Then break down by",
+        ["—"] + _deeper_choices,
+        index=0, key="project_drill_deeper",
+        help="Pick a secondary dimension to split this project's clients further "
+             "(e.g. by Location to see geographic mix).",
+    )
 pdf = df[df['Project'] == sel_project].copy()
 
 if pdf.empty:
     st.stop()
+
+# Optional client-scoped drill — independent of the dimension selector above.
+# Renders a (project, client) section further down between the clients table
+# and the deeper-dimension breakdown.
+sel_client_in_project = st.selectbox(
+    "Drill into a specific client (optional)",
+    ['(All clients in this project)'] + sorted(pdf['Client Name'].dropna().unique().tolist()),
+    key="proj_drill_client",
+    help="Pick one client to see KPIs, a 12-period trend, and cost mix scoped to "
+         "this (project, client) pair. Independent of the dimension selector above.",
+)
 
 # Project-level KPIs
 ck1, ck2, ck3, ck4, ck5 = st.columns(5)
@@ -297,6 +375,112 @@ dataframe_with_freeze(
     },
     width="stretch", hide_index=True,
 )
+
+# ── Per-(project, client) drilldown (Spec 2.3/2.4) ───────────────────────────
+if sel_client_in_project != '(All clients in this project)':
+    cdf_pc = pdf[pdf['Client Name'] == sel_client_in_project].copy()
+    if cdf_pc.empty:
+        st.info(f"No data for {sel_client_in_project} under {sel_project} with current filters.")
+    else:
+        st.markdown(f"#### {sel_project} → {sel_client_in_project}")
+
+        # 5-column KPI strip scoped to this (project, client) pair
+        rev_pc = cdf_pc['Total Revenue'].sum()
+        cst_pc = cdf_pc['Total Cost'].sum()
+        gp_pc  = cdf_pc['GP'].sum()
+        mg_pc  = (gp_pc / rev_pc * 100) if rev_pc else 0
+        vol_pc = cdf_pc['Delivery Volume'].sum()
+        kc1, kc2, kc3, kc4, kc5 = st.columns(5)
+        kc1.metric("Revenue", fmt_idr(rev_pc))
+        kc2.metric("Cost",    fmt_idr(cst_pc))
+        kc3.metric("GP",      fmt_idr(gp_pc))
+        kc4.metric("Margin",  fmt_pct(mg_pc))
+        kc5.metric("Volume",  fmt_vol(vol_pc))
+
+        # 12-period trend (Revenue & Cost bars, GP line)
+        trend_pc = build_trend(cdf_pc, [], view_mode).tail(12)
+        if not trend_pc.empty:
+            fig_pc = go.Figure()
+            fig_pc.add_bar(x=trend_pc['Label'], y=trend_pc['Revenue'], name='Revenue',
+                           marker_color=C_REVENUE, opacity=0.8)
+            fig_pc.add_bar(x=trend_pc['Label'], y=trend_pc['Cost'], name='Cost',
+                           marker_color=C_COST, opacity=0.8)
+            fig_pc.add_scatter(x=trend_pc['Label'], y=trend_pc['GP'], mode='lines+markers',
+                               name='GP', line=dict(color=C_GP, width=2))
+            fig_pc.update_layout(
+                barmode='group', height=380, yaxis_title='IDR', xaxis_tickangle=-45,
+                title=f"{sel_client_in_project} — last 12 {view_mode.lower()} periods"
+            )
+            apply_chart_theme(fig_pc)
+            st.plotly_chart(fig_pc, width="stretch")
+
+        # Cost waterfall — pie of components present for this (project, client)
+        cost_data_pc = {
+            label: cdf_pc[col].sum() for col, label in COST_COMPONENTS.items()
+            if col in cdf_pc.columns and cdf_pc[col].sum() > 0
+        }
+        if cost_data_pc:
+            cost_df_pc = pd.DataFrame({
+                'Component': list(cost_data_pc.keys()),
+                'Amount':    list(cost_data_pc.values()),
+            })
+            fig_wf_pc = px.pie(
+                cost_df_pc, values='Amount', names='Component', hole=0.35,
+                height=360, title=f"{sel_client_in_project} — Cost Structure",
+            )
+            apply_chart_theme(fig_wf_pc)
+            st.plotly_chart(fig_wf_pc, width="stretch")
+
+# ── Deeper breakdown (optional, controlled by selector above) ────────────────
+if deeper_dim != "—":
+    st.markdown(f"#### {sel_project} — by {deeper_dim}")
+    deeper_slice = pdf[pdf[deeper_dim].notna()
+                       & (pdf[deeper_dim].astype(str).str.strip() != '')]
+    if deeper_slice.empty:
+        st.info(f"No rows in this project carry a {deeper_dim} value.")
+    else:
+        deeper_agg = (
+            deeper_slice.groupby(deeper_dim, observed=True)
+            .agg(
+                Clients=('Client Name', 'nunique'),
+                Volume=('Delivery Volume', 'sum'),
+                Revenue=('Total Revenue', 'sum'),
+                Cost=('Total Cost', 'sum'),
+                GP=('GP', 'sum'),
+            )
+            .reset_index()
+        )
+        deeper_agg['Margin %'] = np.where(
+            deeper_agg['Revenue'] != 0,
+            deeper_agg['GP'] / deeper_agg['Revenue'] * 100, 0
+        )
+        deeper_agg = deeper_agg.sort_values('GP', ascending=False).reset_index(drop=True)
+
+        dataframe_with_freeze(
+            deeper_agg[[deeper_dim, 'Clients', 'Volume', 'Revenue', 'Cost', 'GP', 'Margin %']],
+            key=f"project_deeper_{deeper_dim.replace(' ', '_').lower()}",
+            default_freeze=[deeper_dim],
+            column_config={
+                'Clients':  vol_col('Clients'),
+                'Volume':   vol_col('Volume'),
+                'Revenue':  idr_col('Revenue'),
+                'Cost':     idr_col('Cost'),
+                'GP':       idr_col('GP'),
+                'Margin %': pct_col('Margin', signed=False),
+            },
+            width="stretch", hide_index=True,
+        )
+
+        # Stacked GP trend by the chosen dimension
+        deeper_trend = build_trend(deeper_slice, [deeper_dim], view_mode)
+        fig_deeper = px.bar(
+            deeper_trend, x='Label', y='GP', color=deeper_dim,
+            height=360, labels={'GP': 'GP (IDR)', 'Label': 'Period'},
+            title=f"{view_mode} GP — {sel_project} stacked by {deeper_dim}",
+        )
+        fig_deeper.update_layout(barmode='stack', xaxis_tickangle=-45)
+        apply_chart_theme(fig_deeper)
+        st.plotly_chart(fig_deeper, width="stretch")
 
 # Trend
 st.markdown(f"#### {view_mode} P&L Trend")

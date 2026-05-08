@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_mobile_trend,
+                   pop_pct, pop_label, period_selector, build_mobile_trend,
                    apply_chart_theme, idr_col, vol_col, pct_col,
                    dataframe_with_freeze)
 from data_loader import mobile_aggregate
@@ -39,7 +39,7 @@ if df_full.empty:
     st.stop()
 
 # ── Period mode ──────────────────────────────────────────────────────────────
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="mobile_project_view")
+view_mode = period_selector(page_key="mobile_project")
 pop_lbl = pop_label(view_mode)
 
 periods = get_available_periods(df_full, view_mode)

@@ -16,6 +16,7 @@ Note on the future 5-stream model:
 """
 import streamlit as st
 from pathlib import Path
+from datetime import datetime
 
 from data_loader import (
     load_main_data,
@@ -57,25 +58,10 @@ LOADERS = [
 
 # Show data source in sidebar so it's obvious which mode is active
 _using_sharepoint = is_sharepoint_configured()
-with st.sidebar:
-    if _using_sharepoint:
-        st.markdown(
-            "<div style='font-size:0.7rem; opacity:0.65; margin-top:0.5rem;'>"
-            "🔗 Live from SharePoint · cache 5 min</div>",
-            unsafe_allow_html=True,
-        )
-        if st.button("↻ Refresh data", use_container_width=True, key="_refresh_data"):
-            st.cache_data.clear()
-            st.rerun()
-    else:
-        st.markdown(
-            "<div style='font-size:0.7rem; opacity:0.65; margin-top:0.5rem;'>"
-            "📁 Loading from local data/ folder</div>",
-            unsafe_allow_html=True,
-        )
 
-def _get_file_bytes(secrets_key: str, local_filename: str) -> bytes | None:
-    """Resolve file bytes from SharePoint if configured, else local data/."""
+
+def _get_file_bytes(secrets_key: str, local_filename: str) -> tuple[bytes, datetime] | tuple[None, None]:
+    """Resolve file bytes (and a refresh timestamp) from SharePoint if configured, else local data/."""
     if _using_sharepoint:
         try:
             files_secrets = st.secrets.get("files", {})
@@ -87,16 +73,25 @@ def _get_file_bytes(secrets_key: str, local_filename: str) -> bytes | None:
     fpath = DATA_DIR / local_filename
     if fpath.exists():
         with open(fpath, "rb") as f:
-            return f.read()
-    return None
+            return f.read(), datetime.fromtimestamp(fpath.stat().st_mtime)
+    return None, None
 
 
+_refresh_times: list[datetime] = []
+_bytes_fetched_now: int = 0  # Total bytes loaded *this run* — drives the post-refresh toast.
 for key, secrets_key, filename, loader, companions in LOADERS:
+    ts_key = f"_fetched_at_{key}"
     if key in st.session_state:
+        if ts_key in st.session_state:
+            _refresh_times.append(st.session_state[ts_key])
         continue
-    file_bytes = _get_file_bytes(secrets_key, filename)
+    file_bytes, fetched_at = _get_file_bytes(secrets_key, filename)
     if file_bytes is None:
         continue
+    _bytes_fetched_now += len(file_bytes)
+    if fetched_at is not None:
+        st.session_state[ts_key] = fetched_at
+        _refresh_times.append(fetched_at)
     try:
         st.session_state[key] = loader(file_bytes)
         for companion_key, companion_loader in companions:
@@ -104,6 +99,75 @@ for key, secrets_key, filename, loader, companions in LOADERS:
                 st.session_state[companion_key] = companion_loader(file_bytes)
     except Exception as exc:  # noqa: BLE001
         st.sidebar.error(f"Failed to load {filename}: {exc}")
+
+# Post-refresh toast: fires once if the user just clicked Refresh AND the rerun
+# actually re-fetched bytes. Both conditions matter — if the click happened but
+# nothing was fetched (e.g. SharePoint failed), we don't want to falsely confirm.
+if st.session_state.pop("_refresh_clicked", False) and _bytes_fetched_now > 0:
+    _now = datetime.now().strftime("%H:%M:%S")
+    _mb = _bytes_fetched_now / (1024 * 1024)
+    st.toast(f"✓ Refreshed at {_now} · fetched {_mb:.1f} MB", icon="✅")
+
+
+def _format_relative(ts: datetime) -> str:
+    delta = datetime.now() - ts
+    secs = int(delta.total_seconds())
+    if secs < 60:
+        return "just now"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins} min ago"
+    hours = mins // 60
+    if hours < 24:
+        return f"{hours}h ago"
+    days = hours // 24
+    return f"{days}d ago"
+
+
+with st.sidebar:
+    if _using_sharepoint:
+        st.markdown(
+            "<div style='font-size:0.7rem; opacity:0.65; margin-top:0.5rem;'>"
+            "🔗 Live from SharePoint · cache 5 min</div>",
+            unsafe_allow_html=True,
+        )
+        if _refresh_times:
+            latest = max(_refresh_times)
+            st.markdown(
+                f"<div style='font-size:0.7rem; opacity:0.65;' "
+                f"title='{latest.strftime('%Y-%m-%d %H:%M:%S')}'>"
+                f"⟳ Refreshed {_format_relative(latest)}</div>",
+                unsafe_allow_html=True,
+            )
+        if st.button("↻ Refresh data", use_container_width=True, key="_refresh_data"):
+            st.cache_data.clear()
+            # Drop the parsed DataFrames + companions from session_state so the
+            # loader loop actually re-runs on the next pass. Clearing only the
+            # cache leaves the parsed data sitting in session_state, which would
+            # short-circuit the fetch and leave the timestamp stale.
+            for k, _, _, _, comps in LOADERS:
+                st.session_state.pop(k, None)
+                st.session_state.pop(f"_fetched_at_{k}", None)
+                for ck, _ in comps:
+                    st.session_state.pop(ck, None)
+            st.session_state.pop("data", None)
+            # Flag picked up by the post-load toast on the next run.
+            st.session_state["_refresh_clicked"] = True
+            st.rerun()
+    else:
+        st.markdown(
+            "<div style='font-size:0.7rem; opacity:0.65; margin-top:0.5rem;'>"
+            "📁 Loading from local data/ folder</div>",
+            unsafe_allow_html=True,
+        )
+        if _refresh_times:
+            latest = max(_refresh_times)
+            st.markdown(
+                f"<div style='font-size:0.7rem; opacity:0.65;' "
+                f"title='{latest.strftime('%Y-%m-%d %H:%M:%S')}'>"
+                f"⟳ File updated {_format_relative(latest)}</div>",
+                unsafe_allow_html=True,
+            )
 
 # Backward-compat: legacy pages reference st.session_state['data']
 if "delivery_data" in st.session_state and "data" not in st.session_state:

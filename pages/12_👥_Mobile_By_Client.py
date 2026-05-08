@@ -4,7 +4,8 @@ import plotly.express as px
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_mobile_trend,
+                   selected_period_df,
+                   pop_pct, pop_label, period_selector, build_mobile_trend,
                    apply_chart_theme, idr_col, vol_col, pct_col,
                    dataframe_with_freeze)
 from data_loader import mobile_aggregate
@@ -18,14 +19,14 @@ if df_full.empty:
     st.warning("No data loaded.")
     st.stop()
 
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="mobile_client_view")
+view_mode = period_selector(page_key="mobile_client")
 pop_lbl = pop_label(view_mode)
 
 periods = get_available_periods(df_full, view_mode)
 curr_yr, curr_p, curr_lbl = periods[-1]
 prev_info = prev_period_info(periods, curr_yr, curr_p)
 
-curr_df = filter_period(df_full, view_mode, curr_yr, curr_p)
+curr_df = selected_period_df(df_full, view_mode, page_key="mobile_client")
 prev_df = filter_period(df_full, view_mode, prev_info[0], prev_info[1]) if prev_info else pd.DataFrame()
 
 st.caption(f"Latest period: {curr_lbl}")
@@ -57,25 +58,55 @@ merged['Rev per Driver'] = np.where(
     merged['Gross Revenue'] / merged['Total Active Riders'], 0
 )
 
+# ── Spec 4: weighted-correct Delivery PnL % / EV PnL % from base sums ──
+# Row-level percentages can't be summed; reconstitute from sum(PV)/sum(base).
+if '_delivery_pv_base' in merged.columns:
+    merged['Delivery PnL %'] = np.where(
+        merged['_delivery_pv_base'] > 0,
+        merged['Delivery PV'] / merged['_delivery_pv_base'] * 100, 0
+    )
+else:
+    merged['Delivery PnL %'] = 0
+if '_ev_pv_base' in merged.columns:
+    merged['EV PnL %'] = np.where(
+        merged['_ev_pv_base'] > 0,
+        merged['EV PV'] / merged['_ev_pv_base'] * 100, 0
+    )
+else:
+    merged['EV PnL %'] = 0
+
 display = merged[['Client Name', 'Total Cups Sold', 'Total Active Riders',
                   'Cups per Driver', 'Rev per Driver',
+                  'Delivery PV', 'Delivery PnL %', 'EV PV', 'EV PnL %', 'Total PV',
                   'Gross Revenue', 'Blitz Revenue', 'Profit Calc', 'PoP%']].copy()
 display.columns = ['Client', 'Cups', 'Riders', 'Cups/Driver', 'Rev/Driver',
+                   'Delivery PV', 'Delivery PnL %', 'EV PV', 'EV PnL %', 'Total PV',
                    'Gross Revenue', 'Blitz Revenue', 'Profit', 'PoP%']
 
+st.caption(
+    "Sortable by any column. Default sort: **Total PV** (Spec 4 reconciled metric). "
+    "**Profit / PoP%** are the legacy high-level rollup — kept rightmost for continuity "
+    "but exclude rider/manpower/claim/storing costs."
+)
+
 dataframe_with_freeze(
-    display.sort_values('Profit', ascending=False),
+    display.sort_values('Total PV', ascending=False),
     key="mobile_client_rankings",
     default_freeze=['Client'],
     column_config={
-        'Cups':           vol_col('Cups'),
-        'Riders':         vol_col('Riders'),
-        'Cups/Driver':    st.column_config.NumberColumn('Cups/Driver', format="%.1f"),
-        'Rev/Driver':     idr_col('Rev/Driver'),
-        'Gross Revenue':  idr_col('Gross Revenue'),
-        'Blitz Revenue':  idr_col('Blitz Revenue'),
-        'Profit':         idr_col('Profit'),
-        'PoP%':           pct_col('PoP%', signed=True),
+        'Cups':            vol_col('Cups'),
+        'Riders':          vol_col('Riders'),
+        'Cups/Driver':     st.column_config.NumberColumn('Cups/Driver', format="%.1f"),
+        'Rev/Driver':      idr_col('Rev/Driver'),
+        'Delivery PV':     idr_col('Delivery PV'),
+        'Delivery PnL %':  pct_col('Delivery PnL %', signed=False),
+        'EV PV':           idr_col('EV PV'),
+        'EV PnL %':        pct_col('EV PnL %', signed=False),
+        'Total PV':        idr_col('Total PV'),
+        'Gross Revenue':   idr_col('Gross Revenue'),
+        'Blitz Revenue':   idr_col('Blitz Revenue'),
+        'Profit':          idr_col('Profit'),
+        'PoP%':            pct_col('PoP%', signed=True),
     },
     width="stretch", hide_index=True,
 )

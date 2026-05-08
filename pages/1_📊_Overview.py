@@ -6,7 +6,8 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_trend,
+                   selected_period_df,
+                   pop_pct, pop_label, period_selector, build_trend,
                    apply_chart_theme, dataframe_with_freeze)
 
 st.set_page_config(page_title="Overview | Blitz", page_icon="📊", layout="wide")
@@ -20,7 +21,7 @@ if df.empty:
     st.stop()
 
 # ── Period mode selector (drives ALL sections on this page) ────────────────────
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="overview_view")
+view_mode = period_selector(page_key="overview")
 pop = pop_label(view_mode)
 
 # Derive current and previous period
@@ -28,7 +29,7 @@ periods   = get_available_periods(df, view_mode)
 curr_yr, curr_p, curr_lbl = periods[-1]
 prev_info = prev_period_info(periods, curr_yr, curr_p)
 
-curr_df = filter_period(df, view_mode, curr_yr, curr_p)
+curr_df = selected_period_df(df, view_mode, page_key="overview")
 prev_df = filter_period(df, view_mode, prev_info[0], prev_info[1]) if prev_info else pd.DataFrame()
 
 prev_lbl = prev_info[2] if prev_info else "—"

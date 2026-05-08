@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
                    get_available_periods, filter_period, pop_pct, pop_label,
-                   dataframe_with_freeze)
+                   period_selector, dataframe_with_freeze)
 from data_loader import MOBILE_REVENUE_COLS, MOBILE_COST_COLS
 
 st.set_page_config(page_title="Mobile Deep Dive | Blitz", page_icon="🔬", layout="wide")
@@ -28,7 +28,7 @@ with col_client:
     sel_client = st.selectbox("Client", all_clients)
 
 with col_mode:
-    view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="mobile_dd_view")
+    view_mode = period_selector(page_key="mobile_deep_dive")
 
 pop = pop_label(view_mode)
 cdf = df[df['Client Name'] == sel_client].copy()

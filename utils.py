@@ -155,6 +155,50 @@ def pop_label(mode: str) -> str:
     return "WoW" if mode == "Weekly" else "MoM"
 
 
+def period_selector(*, page_key: str, label: str = "View by") -> str:
+    """Render the Weekly/Monthly radio with cross-page persistence.
+
+    The selected value lives in `st.session_state['_period_view']`, so
+    navigating between pages preserves the user's preferred granularity.
+    Each page must still pass a unique `page_key` because Streamlit widgets
+    on different pages need distinct widget keys; only the *value* is shared.
+    """
+    options = ["Weekly", "Monthly"]
+    current = st.session_state.get("_period_view", options[0])
+    if current not in options:
+        current = options[0]
+    chosen = st.radio(
+        label, options,
+        index=options.index(current),
+        horizontal=True,
+        key=f"_period_radio_{page_key}",
+    )
+    st.session_state["_period_view"] = chosen
+    return chosen
+
+
+def selected_period_df(df: pd.DataFrame, view_mode: str, page_key: str) -> pd.DataFrame:
+    """Return the slice of df for the user's currently-selected period.
+
+    Centralises the latest-period plumbing repeated across delivery / mobile
+    pages so KPI strips can simply call:
+
+        curr_df = selected_period_df(df, view_mode, page_key="overview")
+
+    Reads the picked label from `st.session_state[f"_period_pick_{page_key}_{view_mode}"]`
+    so future per-page period pickers can write to that slot. Falls back to
+    the latest available period when nothing has been recorded yet, matching
+    today's behaviour. Returns an empty frame if no periods exist.
+    """
+    periods = get_available_periods(df, view_mode)
+    if not periods:
+        return df.iloc[0:0]
+    sel_lbl = st.session_state.get(f"_period_pick_{page_key}_{view_mode}")
+    match = next((t for t in periods if t[2] == sel_lbl), None) or periods[-1]
+    yr, p, _ = match
+    return filter_period(df, view_mode, yr, p)
+
+
 def build_trend(df: pd.DataFrame, group_cols: list[str], mode: str) -> pd.DataFrame:
     """Aggregate df by period for trend charts. Returns df with a 'Label' column."""
     if mode == "Weekly":

@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from utils import (require_mobile_data, fmt_idr, fmt_vol,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, build_mobile_trend,
+                   pop_pct, pop_label, period_selector, build_mobile_trend,
                    apply_chart_theme, idr_col, vol_col, pct_col,
                    dataframe_with_freeze)
 from data_loader import mobile_aggregate
@@ -17,7 +17,7 @@ if df_full.empty:
     st.warning("No data loaded.")
     st.stop()
 
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="mobile_team_view")
+view_mode = period_selector(page_key="mobile_team")
 pop_lbl = pop_label(view_mode)
 
 periods = get_available_periods(df_full, view_mode)

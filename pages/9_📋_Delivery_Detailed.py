@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
-                   get_available_periods, MONTH_ORDER, dataframe_with_freeze)
+                   get_available_periods, period_selector, MONTH_ORDER, dataframe_with_freeze)
 from data_loader import REVENUE_COLS, COST_COLS
 
 st.set_page_config(page_title="Delivery Detailed | Blitz", page_icon="📋", layout="wide")
@@ -19,7 +19,7 @@ if df.empty:
 # ── Controls ──────────────────────────────────────────────────────────────────
 c1, c2 = st.columns([1, 2])
 with c1:
-    view_mode = st.radio("Period", ["Weekly", "Monthly"], horizontal=True, key="dd_view")
+    view_mode = period_selector(page_key="del_detail", label="Period")
 with c2:
     clients = sorted(df['Client Name'].dropna().unique().tolist())
     sel_client = st.selectbox("Select Client", ["All Clients"] + clients, key="dd_client")

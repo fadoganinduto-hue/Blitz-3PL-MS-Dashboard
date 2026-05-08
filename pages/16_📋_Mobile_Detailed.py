@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
-                   get_available_periods, MONTH_ORDER, dataframe_with_freeze)
+                   get_available_periods, period_selector, MONTH_ORDER, dataframe_with_freeze)
 from data_loader import MOBILE_REVENUE_COLS, MOBILE_COST_COLS, MOBILE_OPS_COLS, mobile_aggregate
 
 st.set_page_config(page_title="Mobile Detailed | Blitz", page_icon="📋", layout="wide")
@@ -18,7 +18,7 @@ if df_full.empty:
 # ── Controls ──────────────────────────────────────────────────────────────────
 c1, c2 = st.columns([1, 2])
 with c1:
-    view_mode = st.radio("Period", ["Weekly", "Monthly"], horizontal=True, key="md_view")
+    view_mode = period_selector(page_key="mobile_detail", label="Period")
 with c2:
     clients = sorted(df_full['Client Name'].dropna().unique().tolist())
     sel_client = st.selectbox("Select Client", ["All Clients"] + clients, key="md_client")
@@ -35,9 +35,14 @@ if df.empty:
 rev_cols = [c for c in MOBILE_REVENUE_COLS if c in df.columns]
 cost_cols = [c for c in MOBILE_COST_COLS if c in df.columns]
 ops_cols = [c for c in MOBILE_OPS_COLS if c in df.columns]
-derived_cols = ['Blitz Revenue', 'Gross Revenue', 'COGS', 'Total Cost (Mobile)',
+derived_cols = ['Delivery PV', 'Delivery PnL %', 'EV PV', 'EV PnL %', 'Total PV',
+                'Mobile Profit',
+                'Blitz Revenue', 'Gross Revenue', 'COGS', 'Total Cost (Mobile)',
                 'Profit Calc', 'Profit Margin %', 'Blitz Margin %']
 derived_cols = [c for c in derived_cols if c in df.columns]
+# The two PnL % columns are the only ones in derived_cols that mustn't be
+# treated as sum-able; their re-aggregation is handled below using the
+# `_delivery_pv_base` / `_ev_pv_base` columns added by load_mobile_data.
 
 # ── Aggregate by period ───────────────────────────────────────────────────────
 if view_mode == "Weekly":
@@ -46,6 +51,14 @@ else:
     group_cols = ['Year', 'Month']
 
 numeric_cols = ops_cols + rev_cols + cost_cols
+# Spec 4 metrics need to roll up correctly through the groupby:
+#   - Sum-able directly: Delivery PV, EV PV, Total PV, Mobile Profit
+#   - Sum-able as denominators: _delivery_pv_base, _ev_pv_base
+#   - PnL %s are recomputed from the summed base/PV pairs after groupby.
+for c in ['Delivery PV', 'EV PV', 'Total PV', 'Mobile Profit',
+          '_delivery_pv_base', '_ev_pv_base']:
+    if c in df.columns and c not in numeric_cols:
+        numeric_cols.append(c)
 numeric_cols = [c for c in numeric_cols if c in df.columns]
 
 # For aggregation: SUM riders across locations for a client in a given week
@@ -75,6 +88,21 @@ agg_df['Blitz Margin %'] = np.where(
     agg_df['Blitz Revenue'] != 0,
     (agg_df['Blitz Revenue'] - agg_df['COGS']) / agg_df['Blitz Revenue'] * 100, 0
 )
+
+# Spec 4: Total PV is sum-able (already in agg_df via groupby). Recompute %s
+# from the post-aggregation base sums.
+if '_delivery_pv_base' in agg_df.columns and 'Delivery PV' in agg_df.columns:
+    agg_df['Delivery PnL %'] = np.where(
+        agg_df['_delivery_pv_base'] > 0,
+        agg_df['Delivery PV'] / agg_df['_delivery_pv_base'] * 100, 0
+    )
+if '_ev_pv_base' in agg_df.columns and 'EV PV' in agg_df.columns:
+    agg_df['EV PnL %'] = np.where(
+        agg_df['_ev_pv_base'] > 0,
+        agg_df['EV PV'] / agg_df['_ev_pv_base'] * 100, 0
+    )
+if 'Delivery PV' in agg_df.columns and 'EV PV' in agg_df.columns:
+    agg_df['Total PV'] = agg_df['Delivery PV'].fillna(0) + agg_df['EV PV'].fillna(0)
 
 # Per-driver metrics
 riders = _safe_col(agg_df, 'Total Active Riders').replace(0, np.nan)
@@ -118,8 +146,10 @@ result = agg_df[['Period'] + display_cols].copy()
 
 # Grand total
 total_row = {'Period': 'TOTAL'}
+_pct_cols = {'Profit Margin %', 'Blitz Margin %', 'Cups per Driver', 'Revenue per Driver',
+             'Delivery PnL %', 'EV PnL %'}
 for c in display_cols:
-    if c in ['Profit Margin %', 'Blitz Margin %', 'Cups per Driver', 'Revenue per Driver']:
+    if c in _pct_cols:
         pass
     else:
         total_row[c] = result[c].sum()
@@ -137,6 +167,15 @@ total_cups = total_row.get('Total Cups Sold', 0)
 total_row['Cups per Driver'] = total_cups / total_riders if total_riders else 0
 total_row['Revenue per Driver'] = gr / total_riders if total_riders else 0
 
+# Spec 4: weighted-correct PnL % for the TOTAL row. Bases live on agg_df
+# (they're underscore-prefixed and not in display_cols), so read them there.
+_dbase = agg_df['_delivery_pv_base'].sum() if '_delivery_pv_base' in agg_df.columns else 0
+_ebase = agg_df['_ev_pv_base'].sum() if '_ev_pv_base' in agg_df.columns else 0
+if 'Delivery PnL %' in display_cols:
+    total_row['Delivery PnL %'] = (total_row.get('Delivery PV', 0) / _dbase * 100) if _dbase else 0
+if 'EV PnL %' in display_cols:
+    total_row['EV PnL %'] = (total_row.get('EV PV', 0) / _ebase * 100) if _ebase else 0
+
 result = pd.concat([result, pd.DataFrame([total_row])], ignore_index=True)
 
 # ── Display ───────────────────────────────────────────────────────────────────
@@ -144,7 +183,7 @@ st.subheader(f"{'Weekly' if view_mode == 'Weekly' else 'Monthly'} Breakdown — 
 
 format_dict = {}
 for c in display_cols:
-    if c in ['Profit Margin %', 'Blitz Margin %']:
+    if c in ['Profit Margin %', 'Blitz Margin %', 'Delivery PnL %', 'EV PnL %']:
         format_dict[c] = '{:.1f}%'
     elif c in ['Total Active Riders', 'Total Cups Sold']:
         format_dict[c] = '{:,.0f}'

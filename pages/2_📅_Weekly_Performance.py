@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   pop_pct, pop_label, dataframe_with_freeze)
+                   pop_pct, pop_label, period_selector, dataframe_with_freeze)
 
 st.set_page_config(page_title="Period Performance | Blitz", page_icon="📅", layout="wide")
 st.title("📅 Period Performance")
@@ -23,7 +23,7 @@ if df.empty:
     st.stop()
 
 # ── Period mode + selectors ───────────────────────────────────────────────────
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="pp_view")
+view_mode = period_selector(page_key="period_perf")
 pop = pop_label(view_mode)
 
 periods = get_available_periods(df, view_mode)

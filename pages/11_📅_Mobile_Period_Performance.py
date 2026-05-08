@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
-                   get_available_periods, filter_period, pop_pct, pop_label, build_mobile_trend)
+                   get_available_periods, filter_period, pop_pct, pop_label, period_selector, build_mobile_trend)
 from data_loader import mobile_aggregate
 
 st.set_page_config(page_title="Mobile Period Performance | Blitz", page_icon="📅", layout="wide")
@@ -17,7 +17,7 @@ if df_full.empty:
     st.warning("No data loaded.")
     st.stop()
 
-view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="mobile_perf_view")
+view_mode = period_selector(page_key="mobile_perf")
 pop_label_val = pop_label(view_mode)
 
 periods = get_available_periods(df_full, view_mode)

@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import io
+from datetime import datetime
 
 MONTH_ORDER = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -138,7 +139,7 @@ def _get_graph_access_token() -> str:
 
 
 @st.cache_data(ttl=300, show_spinner="Fetching from SharePoint…")
-def fetch_from_sharepoint(file_url: str) -> bytes:
+def fetch_from_sharepoint(file_url: str) -> tuple[bytes, datetime]:
     """Download an Excel file from SharePoint via Microsoft Graph API.
 
     Args:
@@ -148,8 +149,10 @@ def fetch_from_sharepoint(file_url: str) -> bytes:
             both work — Graph's /shares endpoint accepts either.
 
     Returns:
-        Raw .xlsx bytes. Pass directly to load_main_data, load_mobile_data,
-        load_borzo_monthly, etc.
+        Tuple of (raw .xlsx bytes, fetched_at). The timestamp is captured at
+        actual fetch time and survives cache hits, so callers can display
+        "last refreshed N minutes ago" without confusing cached reads with
+        fresh fetches.
 
     Cache: 5-minute TTL. Multiple page navigations within that window
     reuse the cached bytes; only the first call after expiry hits Graph.
@@ -172,7 +175,7 @@ def fetch_from_sharepoint(file_url: str) -> bytes:
         timeout=30,
     )
     response.raise_for_status()
-    return response.content
+    return response.content, datetime.now()
 
 
 @st.cache_data(show_spinner="Loading data...")
@@ -381,6 +384,47 @@ def load_mobile_data(file_bytes: bytes) -> pd.DataFrame:
     df['Profit Margin %'] = np.where(df['Gross Revenue'] != 0, df['Profit Calc'] / df['Gross Revenue'] * 100, 0)
     df['Blitz Margin %']  = np.where(df['Blitz Revenue'] != 0,
                                      (df['Blitz Revenue'] - df['COGS']) / df['Blitz Revenue'] * 100, 0)
+
+    # ── Spec 4: source-first reconciled metrics ──────────────────────────────
+    # AF/AG/AH/AI/AJ are loaded as MOBILE_PNL_COLS:
+    #   AF Profit              → 'Mobile Profit'
+    #   AG Delivery PV         → 'Delivery PV'    (kept as-is)
+    #   AH Delivery Only PnL   → 'Delivery PnL %' (×100; source is decimal)
+    #   AI EV Related PV       → 'EV PV'
+    #   AJ EV Related Only PnL → 'EV PnL %'      (×100)
+    # Prefer source values; only fall back to recomputation if a column is
+    # missing or entirely zero (likely a malformed export).
+    def _source_or_fallback(col: str, fallback):
+        if col in df.columns and df[col].abs().sum() > 0:
+            return df[col]
+        return fallback
+
+    df['Mobile Profit']  = _source_or_fallback('Profit', df['Profit Calc'])
+    df['Delivery PnL %'] = _source_or_fallback('Delivery Only PnL',
+                                               pd.Series(0.0, index=df.index)) * 100
+    df['EV PV']          = _source_or_fallback('EV Related PV',
+                                               pd.Series(0.0, index=df.index))
+    df['EV PnL %']       = _source_or_fallback('EV Related Only PnL',
+                                               pd.Series(0.0, index=df.index)) * 100
+    if 'Delivery PV' not in df.columns:
+        df['Delivery PV'] = 0.0
+    df['Total PV']       = df['Delivery PV'].fillna(0) + df['EV PV'].fillna(0)
+
+    # Implicit denominators back-calculated from per-row (PV / ratio). Stored
+    # so KPI strips can compute correctly weighted aggregates as
+    # `sum(PV) / sum(base) × 100`. Summing row-level % directly is wrong;
+    # mobile_aggregate sums all numerics so percentages can't be trusted post-agg.
+    if 'Delivery Only PnL' in df.columns:
+        ratio = df['Delivery Only PnL']
+        df['_delivery_pv_base'] = np.where(ratio != 0, df['Delivery PV'] / ratio, 0)
+    else:
+        df['_delivery_pv_base'] = 0.0
+    if 'EV Related Only PnL' in df.columns:
+        ratio = df['EV Related Only PnL']
+        df['_ev_pv_base'] = np.where(ratio != 0, df['EV PV'] / ratio, 0)
+    else:
+        df['_ev_pv_base'] = 0.0
+
     return df
 
 

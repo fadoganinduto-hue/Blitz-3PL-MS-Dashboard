@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, pop_pct, pop_label,
-                   dataframe_with_freeze)
+                   period_selector, dataframe_with_freeze)
 from data_loader import REVENUE_COLS, COST_COLS, COST_COMPONENTS
 
 st.set_page_config(page_title="Deep Dive | Blitz", page_icon="🔬", layout="wide")
@@ -32,7 +32,7 @@ with col_client:
     sel_client = st.selectbox("Client", all_clients)
 
 with col_mode:
-    view_mode = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="dd_view")
+    view_mode = period_selector(page_key="deep_dive")
 
 pop = pop_label(view_mode)
 cdf = df[df['Client Name'] == sel_client].copy()
