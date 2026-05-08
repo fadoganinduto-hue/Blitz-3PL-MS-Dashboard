@@ -186,9 +186,9 @@ def selected_period_df(df: pd.DataFrame, view_mode: str, page_key: str) -> pd.Da
         curr_df = selected_period_df(df, view_mode, page_key="overview")
 
     Reads the picked label from `st.session_state[f"_period_pick_{page_key}_{view_mode}"]`
-    so future per-page period pickers can write to that slot. Falls back to
-    the latest available period when nothing has been recorded yet, matching
-    today's behaviour. Returns an empty frame if no periods exist.
+    so per-page period pickers can write to that slot. Falls back to the
+    latest available period when nothing has been recorded yet. Returns an
+    empty frame if no periods exist.
     """
     periods = get_available_periods(df, view_mode)
     if not periods:
@@ -197,6 +197,50 @@ def selected_period_df(df: pd.DataFrame, view_mode: str, page_key: str) -> pd.Da
     match = next((t for t in periods if t[2] == sel_lbl), None) or periods[-1]
     yr, p, _ = match
     return filter_period(df, view_mode, yr, p)
+
+
+def selected_period_info(df: pd.DataFrame, view_mode: str, page_key: str) -> tuple:
+    """Companion to `selected_period_df` that returns the picked period's
+    `(year, period_value, period_label)` triple instead of the dataframe slice.
+
+    Pages use this to keep subheaders ("Latest Month — X"), PoP comparisons,
+    and `prev_period_info` lookups aligned with whatever period the user
+    picked. Falls back to the latest period when nothing's been picked.
+    """
+    periods = get_available_periods(df, view_mode)
+    if not periods:
+        return None, None, None
+    sel_lbl = st.session_state.get(f"_period_pick_{page_key}_{view_mode}")
+    return next((t for t in periods if t[2] == sel_lbl), None) or periods[-1]
+
+
+def period_picker(df: pd.DataFrame, view_mode: str, page_key: str,
+                  *, label: str = "Period") -> str | None:
+    """Render a period-selection dropdown alongside `period_selector`.
+
+    Lists every available period for the current `view_mode` in reverse-
+    chronological order (latest first) so the default selection sits at
+    index 0 and the user doesn't have to scroll for the typical case.
+    Writes the chosen label to `_period_pick_<page_key>_<view_mode>`,
+    which `selected_period_df` / `selected_period_info` already read.
+
+    Returns the chosen label, or None if no periods are available.
+    """
+    periods = get_available_periods(df, view_mode)
+    if not periods:
+        return None
+    options = [t[2] for t in periods][::-1]   # latest first
+    slot = f"_period_pick_{page_key}_{view_mode}"
+    current = st.session_state.get(slot, options[0])
+    if current not in options:
+        current = options[0]
+    chosen = st.selectbox(
+        label, options,
+        index=options.index(current),
+        key=f"_period_picker_{page_key}_{view_mode}",
+    )
+    st.session_state[slot] = chosen
+    return chosen
 
 
 def build_trend(df: pd.DataFrame, group_cols: list[str], mode: str) -> pd.DataFrame:

@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from utils import (require_mobile_data, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   selected_period_df,
+                   selected_period_df, selected_period_info, period_picker,
                    pop_pct, pop_label, period_selector, build_mobile_trend)
 from data_loader import mobile_aggregate
 
@@ -19,11 +19,15 @@ if df_full.empty:
     st.warning("No data loaded.")
     st.stop()
 
-view_mode = period_selector(page_key="mobile_overview")
+_pc1, _pc2 = st.columns([1, 2])
+with _pc1:
+    view_mode = period_selector(page_key="mobile_overview")
+with _pc2:
+    period_picker(df_full, view_mode, page_key="mobile_overview")
 pop = pop_label(view_mode)
 
 periods = get_available_periods(df_full, view_mode)
-curr_yr, curr_p, curr_lbl = periods[-1]
+curr_yr, curr_p, curr_lbl = selected_period_info(df_full, view_mode, page_key="mobile_overview")
 prev_info = prev_period_info(periods, curr_yr, curr_p)
 
 curr_df = selected_period_df(df_full, view_mode, page_key="mobile_overview")

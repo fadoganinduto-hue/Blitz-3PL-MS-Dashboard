@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   selected_period_df,
+                   selected_period_df, selected_period_info, period_picker,
                    pop_pct, pop_label, period_selector, build_trend, apply_chart_theme,
                    idr_col, vol_col, pct_col, dataframe_with_freeze)
 from data_loader import COST_COMPONENTS
@@ -46,7 +46,11 @@ if df.empty:
     st.stop()
 
 # ── Period mode ──────────────────────────────────────────────────────────────
-view_mode = period_selector(page_key="sla_type")
+_pc1, _pc2 = st.columns([1, 2])
+with _pc1:
+    view_mode = period_selector(page_key="sla_type")
+with _pc2:
+    period_picker(df, view_mode, page_key="sla_type")
 pop = pop_label(view_mode)
 
 periods = get_available_periods(df, view_mode)
@@ -54,7 +58,7 @@ if not periods:
     st.warning("No periods available.")
     st.stop()
 
-curr_yr, curr_p, curr_lbl = periods[-1]
+curr_yr, curr_p, curr_lbl = selected_period_info(df, view_mode, page_key="sla_type")
 prev_info = prev_period_info(periods, curr_yr, curr_p)
 curr_df = selected_period_df(df, view_mode, page_key="sla_type")
 prev_df = filter_period(df, view_mode, prev_info[0], prev_info[1]) if prev_info else pd.DataFrame()

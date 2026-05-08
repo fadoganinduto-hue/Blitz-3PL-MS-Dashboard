@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from utils import (require_data, sidebar_filters, fmt_idr, fmt_pct, fmt_vol,
                    C_REVENUE, C_COST, C_GP, C_VOLUME, MONTH_ORDER,
                    get_available_periods, filter_period, prev_period_info,
-                   selected_period_df,
+                   selected_period_df, selected_period_info, period_picker,
                    pop_pct, pop_label, period_selector, build_trend,
                    apply_chart_theme, dataframe_with_freeze)
 
@@ -21,12 +21,16 @@ if df.empty:
     st.stop()
 
 # ── Period mode selector (drives ALL sections on this page) ────────────────────
-view_mode = period_selector(page_key="overview")
+_pc1, _pc2 = st.columns([1, 2])
+with _pc1:
+    view_mode = period_selector(page_key="overview")
+with _pc2:
+    period_picker(df, view_mode, page_key="overview")
 pop = pop_label(view_mode)
 
 # Derive current and previous period
 periods   = get_available_periods(df, view_mode)
-curr_yr, curr_p, curr_lbl = periods[-1]
+curr_yr, curr_p, curr_lbl = selected_period_info(df, view_mode, page_key="overview")
 prev_info = prev_period_info(periods, curr_yr, curr_p)
 
 curr_df = selected_period_df(df, view_mode, page_key="overview")
