@@ -139,7 +139,7 @@ def _get_graph_access_token() -> str:
 
 
 @st.cache_data(ttl=300, show_spinner="Fetching from SharePoint…")
-def fetch_from_sharepoint(file_url: str) -> tuple[bytes, datetime]:
+def fetch_from_sharepoint(file_url: str) -> bytes:
     """Download an Excel file from SharePoint via Microsoft Graph API.
 
     Args:
@@ -149,33 +149,51 @@ def fetch_from_sharepoint(file_url: str) -> tuple[bytes, datetime]:
             both work — Graph's /shares endpoint accepts either.
 
     Returns:
-        Tuple of (raw .xlsx bytes, fetched_at). The timestamp is captured at
-        actual fetch time and survives cache hits, so callers can display
-        "last refreshed N minutes ago" without confusing cached reads with
-        fresh fetches.
+        Raw .xlsx bytes.
+
+    Side effects (for the sidebar status indicator):
+      - On success → writes `st.session_state['_sp_last_ok'] = datetime.now()`
+        and clears `st.session_state['_sp_last_error'] = None`.
+      - On failure → writes `st.session_state['_sp_last_error'] = {time, message, url}`
+        and re-raises so the caller can fall back / surface the error.
+
+    Both timestamps are naive `datetime.now()` (local time), so the sidebar's
+    `format_relative` helper can subtract them without timezone issues.
 
     Cache: 5-minute TTL. Multiple page navigations within that window
     reuse the cached bytes; only the first call after expiry hits Graph.
-    Use st.cache_data.clear() to force a fresh fetch.
+    Use st.cache_data.clear() to force a fresh fetch. Note that cache hits
+    DO NOT update _sp_last_ok — the timestamp reflects the most recent real
+    HTTP fetch, which is the correct semantics for "last refreshed".
     """
     import base64
     import requests
 
-    token = _get_graph_access_token()
+    try:
+        token = _get_graph_access_token()
 
-    # Microsoft Graph's /shares endpoint accepts a "sharing token" derived
-    # from any SharePoint URL via base64url encoding.
-    encoded = base64.urlsafe_b64encode(file_url.encode()).decode().rstrip("=")
-    sharing_token = f"u!{encoded}"
+        # Microsoft Graph's /shares endpoint accepts a "sharing token" derived
+        # from any SharePoint URL via base64url encoding.
+        encoded = base64.urlsafe_b64encode(file_url.encode()).decode().rstrip("=")
+        sharing_token = f"u!{encoded}"
 
-    response = requests.get(
-        f"https://graph.microsoft.com/v1.0/shares/{sharing_token}/driveItem/content",
-        headers={"Authorization": f"Bearer {token}"},
-        allow_redirects=True,
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.content, datetime.now()
+        response = requests.get(
+            f"https://graph.microsoft.com/v1.0/shares/{sharing_token}/driveItem/content",
+            headers={"Authorization": f"Bearer {token}"},
+            allow_redirects=True,
+            timeout=30,
+        )
+        response.raise_for_status()
+        st.session_state['_sp_last_ok'] = datetime.now()
+        st.session_state['_sp_last_error'] = None
+        return response.content
+    except Exception as exc:  # noqa: BLE001
+        st.session_state['_sp_last_error'] = {
+            'time': datetime.now(),
+            'message': str(exc),
+            'url': file_url,
+        }
+        raise
 
 
 @st.cache_data(show_spinner="Loading data...")

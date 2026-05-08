@@ -60,38 +60,39 @@ LOADERS = [
 _using_sharepoint = is_sharepoint_configured()
 
 
-def _get_file_bytes(secrets_key: str, local_filename: str) -> tuple[bytes, datetime] | tuple[None, None]:
-    """Resolve file bytes (and a refresh timestamp) from SharePoint if configured, else local data/."""
+def _get_file_bytes(secrets_key: str, local_filename: str) -> bytes | None:
+    """Resolve file bytes from SharePoint if configured, else local data/.
+
+    SharePoint successes/failures are logged into session_state by
+    fetch_from_sharepoint itself (see _sp_last_ok / _sp_last_error); this
+    function just swallows the exception so the loader loop can fall through
+    to the local-file path or skip cleanly.
+    """
     if _using_sharepoint:
         try:
             files_secrets = st.secrets.get("files", {})
             url = files_secrets.get(secrets_key) if hasattr(files_secrets, "get") else files_secrets[secrets_key]
             if url:
                 return fetch_from_sharepoint(url)
-        except Exception as exc:  # noqa: BLE001
-            st.sidebar.error(f"SharePoint fetch failed for {secrets_key}: {exc}")
+        except Exception:  # noqa: BLE001
+            # Error already recorded in session_state['_sp_last_error'] by
+            # fetch_from_sharepoint. Sidebar status indicator surfaces it.
+            pass
     fpath = DATA_DIR / local_filename
     if fpath.exists():
         with open(fpath, "rb") as f:
-            return f.read(), datetime.fromtimestamp(fpath.stat().st_mtime)
-    return None, None
+            return f.read()
+    return None
 
 
-_refresh_times: list[datetime] = []
 _bytes_fetched_now: int = 0  # Total bytes loaded *this run* — drives the post-refresh toast.
 for key, secrets_key, filename, loader, companions in LOADERS:
-    ts_key = f"_fetched_at_{key}"
     if key in st.session_state:
-        if ts_key in st.session_state:
-            _refresh_times.append(st.session_state[ts_key])
         continue
-    file_bytes, fetched_at = _get_file_bytes(secrets_key, filename)
+    file_bytes = _get_file_bytes(secrets_key, filename)
     if file_bytes is None:
         continue
     _bytes_fetched_now += len(file_bytes)
-    if fetched_at is not None:
-        st.session_state[ts_key] = fetched_at
-        _refresh_times.append(fetched_at)
     try:
         st.session_state[key] = loader(file_bytes)
         for companion_key, companion_loader in companions:
@@ -109,7 +110,13 @@ if st.session_state.pop("_refresh_clicked", False) and _bytes_fetched_now > 0:
     st.toast(f"✓ Refreshed at {_now} · fetched {_mb:.1f} MB", icon="✅")
 
 
-def _format_relative(ts: datetime) -> str:
+def format_relative(ts: datetime) -> str:
+    """Compact "N ago" string for a naive local-time datetime.
+
+    Pairs with `_sp_last_ok` / `_sp_last_error['time']`, which are also naive
+    `datetime.now()` values written by fetch_from_sharepoint. Same timezone
+    on both sides → no aware/naive mix-ups.
+    """
     delta = datetime.now() - ts
     secs = int(delta.total_seconds())
     if secs < 60:
@@ -124,50 +131,73 @@ def _format_relative(ts: datetime) -> str:
     return f"{days}d ago"
 
 
-with st.sidebar:
-    if _using_sharepoint:
-        st.markdown(
-            "<div style='font-size:0.7rem; opacity:0.65; margin-top:0.5rem;'>"
-            "🔗 Live from SharePoint · cache 5 min</div>",
-            unsafe_allow_html=True,
+def render_data_source_status() -> None:
+    """One-stop sidebar widget describing the data source's current health.
+
+    Distinguishes five states:
+      📁 Local data folder       — SharePoint not configured.
+      🟢 Live from SharePoint    — Last fetch succeeded; serving fresh data.
+      ⚠️  SharePoint unreachable — Last attempt failed but a previous fetch
+                                  succeeded; serving cached bytes from then.
+      🔴 Cannot reach SharePoint — Never succeeded this session; no data.
+      ⏳ Loading...              — Cold start, no fetch attempted yet.
+
+    Note: the app fetches two SharePoint files (delivery + mobile) per run.
+    If only one of them fails, _sp_last_error['time'] > _sp_last_ok and we
+    flip to ⚠️ even though one stream is healthy. That's the literal
+    spec semantics — the indicator tracks the most recent event.
+    """
+    if not is_sharepoint_configured():
+        st.sidebar.markdown("📁 **Local data folder**")
+        return
+
+    last_ok    = st.session_state.get('_sp_last_ok')
+    last_error = st.session_state.get('_sp_last_error')
+
+    rel = format_relative(last_ok) if last_ok else "never"
+
+    if last_error and last_ok and (last_error['time'] > last_ok):
+        st.sidebar.error(
+            f"⚠️ **SharePoint unreachable**\n\n"
+            f"Last good fetch: {rel}\n\n"
+            f"Showing cached data. Click ↻ to retry."
         )
-        if _refresh_times:
-            latest = max(_refresh_times)
-            st.markdown(
-                f"<div style='font-size:0.7rem; opacity:0.65;' "
-                f"title='{latest.strftime('%Y-%m-%d %H:%M:%S')}'>"
-                f"⟳ Refreshed {_format_relative(latest)}</div>",
-                unsafe_allow_html=True,
-            )
+        with st.sidebar.expander("Error details"):
+            st.code(last_error['message'])
+    elif last_error and not last_ok:
+        st.sidebar.error(
+            "🔴 **Cannot reach SharePoint**\n\n"
+            "No data loaded. Check credentials and file URLs."
+        )
+        with st.sidebar.expander("Error details"):
+            st.code(last_error['message'])
+    elif last_ok:
+        st.sidebar.markdown(
+            f"🟢 **Live from SharePoint**\n\n"
+            f"Refreshed {rel}"
+        )
+    else:
+        st.sidebar.info("⏳ Loading from SharePoint...")
+
+
+render_data_source_status()
+
+if _using_sharepoint:
+    with st.sidebar:
         if st.button("↻ Refresh data", use_container_width=True, key="_refresh_data"):
             st.cache_data.clear()
             # Drop the parsed DataFrames + companions from session_state so the
             # loader loop actually re-runs on the next pass. Clearing only the
             # cache leaves the parsed data sitting in session_state, which would
-            # short-circuit the fetch and leave the timestamp stale.
+            # short-circuit the fetch and leave the indicator stuck.
             for k, _, _, _, comps in LOADERS:
                 st.session_state.pop(k, None)
-                st.session_state.pop(f"_fetched_at_{k}", None)
                 for ck, _ in comps:
                     st.session_state.pop(ck, None)
             st.session_state.pop("data", None)
             # Flag picked up by the post-load toast on the next run.
             st.session_state["_refresh_clicked"] = True
             st.rerun()
-    else:
-        st.markdown(
-            "<div style='font-size:0.7rem; opacity:0.65; margin-top:0.5rem;'>"
-            "📁 Loading from local data/ folder</div>",
-            unsafe_allow_html=True,
-        )
-        if _refresh_times:
-            latest = max(_refresh_times)
-            st.markdown(
-                f"<div style='font-size:0.7rem; opacity:0.65;' "
-                f"title='{latest.strftime('%Y-%m-%d %H:%M:%S')}'>"
-                f"⟳ File updated {_format_relative(latest)}</div>",
-                unsafe_allow_html=True,
-            )
 
 # Backward-compat: legacy pages reference st.session_state['data']
 if "delivery_data" in st.session_state and "data" not in st.session_state:
