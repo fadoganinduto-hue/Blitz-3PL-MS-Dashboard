@@ -64,6 +64,8 @@ Derived columns added:
 
 For monthly views, `build_mobile_trend()` averages weekly rider totals (not sum) — riders is a stock, not a flow.
 
+**Mobile aggregation gotcha:** the source sheet has a raw `Profit` column AND the loader adds `Profit Calc` (the canonical computed value). `mobile_aggregate()` sums *both*. If you then rename `Profit Calc → Profit` for display on the whole frame, you get two `Profit` columns, which pyarrow rejects with `Duplicate column names found`. Always **select-then-rename**: pick the explicit list of source columns first (excluding `Profit`), then rename. `build_mobile_trend()` doesn't have this problem because it constructs `Profit` from `Profit Calc` via a fresh `agg(...)`.
+
 ## Shared page utilities (utils.py)
 
 - `sidebar_filters(df, page_key=...)` — **delivery-only** filter set (Year / Blitz Team / Month / Client Level / SLA Type). Mobile pages have no equivalent because mobile data doesn't carry the `Blitz Team` / `Client Level` / `SLA Type` columns. Always pass a unique `page_key` to avoid widget-state collisions across pages.
@@ -72,6 +74,7 @@ For monthly views, `build_mobile_trend()` averages weekly rider totals (not sum)
 - `apply_chart_theme(fig)` — wrap every Plotly figure with this for consistent typography, transparent background (so dark/light theme works), top-right horizontal legend, soft y-grid only.
 - `idr_col` / `vol_col` / `pct_col` — `st.column_config.NumberColumn` factories. **Always pass numeric values to `st.dataframe` and use these for display formatting** — pre-formatting strings breaks Streamlit's column sort (e.g. `"5,827"` < `"641"` lexicographically).
 - `fmt_idr` / `fmt_pct` / `fmt_vol` — text formatters for KPI cards and inline display only.
+- `dataframe_with_freeze(df, *, key, column_config=None, default_freeze=None, **dataframe_kwargs)` — drop-in replacement for `st.dataframe` on **wide tables** (≥6 display columns). Renders a collapsed "🔒 Freeze columns" expander above the table; selected columns get `pinned=True` applied to their existing `column_config` (mutates the cloned dict — Streamlit column configs are dicts internally, so NumberColumn format/alignment is preserved). Accepts both DataFrames and Stylers (Stylers are unwrapped via `.data`). `key` must be unique per page; `default_freeze` should be the natural identifier (`Client Name`, `SLA Type`, `Project`, `Label`, etc.). Skip on narrow tables (≤4 cols) — the expander adds visual clutter that isn't worth it.
 
 `COST_COMPONENTS` (exported from `data_loader.py`) is the canonical raw-column → display-bucket mapping used by cost-waterfall charts (`Rider Cost` → "Rider", `Mid-Mile/ Linehaul Cost` → "Mid-Mile", etc.). When adding a new cost waterfall, import this rather than re-hardcoding bucket names.
 
