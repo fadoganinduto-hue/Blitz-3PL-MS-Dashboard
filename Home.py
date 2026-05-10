@@ -217,8 +217,9 @@ PAGES = {
         st.Page("pages/7_📈_Finance_Check.py",       title="Finance Check",      icon="📈"),
         st.Page("pages/7_🎯_SLA_Check.py",           title="SLA Check",          icon="🎯"),
         st.Page("pages/8_🔬_Deep_Dive.py",           title="Deep Dive",          icon="🔬"),
-        st.Page("pages/9_📋_Delivery_Detailed.py",   title="Delivery Detailed",  icon="📋"),
-        st.Page("pages/2_📋_Project_Detailed.py",    title="Project Detailed",   icon="📋"),
+        st.Page("pages/9_📋_Delivery_Detailed.py",      title="Delivery Detailed",        icon="📋"),
+        st.Page("pages/2_📋_Project_Detailed.py",       title="Project Detailed",         icon="📋"),
+        st.Page("pages/2_📋_Client_Project_Detail.py",  title="Client → Project Detail",  icon="📋"),
     ],
     "Blitz Mobile": [
         st.Page("pages/10_📱_Mobile_Overview.py",            title="Overview",           icon="📱"),
