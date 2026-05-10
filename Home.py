@@ -229,6 +229,7 @@ PAGES = {
         st.Page("pages/14_🏙️_Mobile_By_Team.py",             title="By Team",            icon="🏙️"),
         st.Page("pages/15_🔬_Mobile_Deep_Dive.py",           title="Deep Dive",          icon="🔬"),
         st.Page("pages/16_📋_Mobile_Detailed.py",            title="Mobile Detailed",    icon="📋"),
+        st.Page("pages/16_📋_Mobile_Project_Detailed.py",    title="Mobile Project Detailed", icon="📋"),
     ],
     "EV": [
         st.Page("pages/5_⚡_EV_Overview.py", title="EV Overview", icon="⚡"),

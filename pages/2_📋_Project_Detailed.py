@@ -22,8 +22,8 @@ from data_loader import REVENUE_COLS, COST_COLS
 
 st.set_page_config(page_title="Project Detailed | Blitz", page_icon="📋", layout="wide")
 st.title("📋 Project — Detailed Breakdown")
-st.caption("Full column-level detail per project, broken down by week or month. "
-           "Optional client filter within the selected project.")
+st.caption("Full column-level delivery P&L per project. Pick a project, "
+           "optionally narrow to a single client within it.")
 
 df_full = require_data()
 
@@ -64,7 +64,7 @@ clients_in_proj = sorted(
 with c2:
     sel_client = st.selectbox(
         "Client filter",
-        ["(All clients)"] + clients_in_proj,
+        ["(All clients in project)"] + clients_in_proj,
         key="pd_client",
     )
 with c3:
@@ -72,7 +72,7 @@ with c3:
 
 # Apply project (and optional client) filter
 df = df[df['Project'] == sel_project]
-if sel_client != "(All clients)":
+if sel_client != "(All clients in project)":
     df = df[df['Client Name'] == sel_client]
 
 if df.empty:
@@ -152,7 +152,7 @@ total_row['TRPO'] = (total_row.get('Total Revenue', 0) / total_vol) if total_vol
 result = pd.concat([result, pd.DataFrame([total_row])], ignore_index=True)
 
 # ── Display ───────────────────────────────────────────────────────────────────
-title_suffix = sel_project if sel_client == "(All clients)" else f"{sel_project} → {sel_client}"
+title_suffix = sel_project if sel_client == "(All clients in project)" else f"{sel_project} → {sel_client}"
 st.subheader(f"{view_mode} Breakdown — {title_suffix}")
 
 # column_config — keeps numeric sort working. idr_col auto-tags headers (Rp),
@@ -243,11 +243,11 @@ if cost_cols:
 st.divider()
 proj_slug   = sel_project.replace(' ', '_').replace('/', '-')
 client_slug = (sel_client.replace(' ', '_').replace('/', '-')
-               if sel_client != "(All clients)" else "all")
+               if sel_client != "(All clients in project)" else "all")
 csv_data = result.to_csv(index=False)
 st.download_button(
     "📥 Download as CSV",
     data=csv_data,
-    file_name=f"project_detailed_{proj_slug}_{client_slug}_{view_mode.lower()}.csv",
+    file_name=f"project_detailed_delivery_{proj_slug}_{client_slug}_{view_mode.lower()}.csv",
     mime="text/csv",
 )
