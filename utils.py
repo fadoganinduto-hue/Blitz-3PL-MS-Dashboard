@@ -780,3 +780,79 @@ def apply_chart_theme(fig: go.Figure) -> go.Figure:
     fig.update_yaxes(gridcolor="rgba(120,120,120,0.15)", zeroline=False)
     return fig
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cross-company helpers — for Group Overview, Borzo By Client, EV Leasing
+# ─────────────────────────────────────────────────────────────────────────────
+# `*_optional` returns None when the source is unavailable so the calling page
+# can gracefully degrade. Borzo data isn't integrated in this repo yet, so its
+# helpers return None / empty.
+
+def get_blitz_delivery_optional() -> pd.DataFrame | None:
+    """Return Blitz Delivery data from session state, or None if unavailable."""
+    _auto_load_from_data_folder()
+    df = st.session_state.get('delivery_data')
+    if df is None:
+        df = st.session_state.get('data')
+    if df is None or df.empty:
+        return None
+    return df.copy()
+
+
+def get_blitz_mobile_optional() -> pd.DataFrame | None:
+    """Return Blitz Mobile Sellers data from session state, or None if unavailable."""
+    _auto_load_from_data_folder()
+    df = st.session_state.get('mobile_data')
+    if df is None or df.empty:
+        return None
+    return df.copy()
+
+
+def get_borzo_monthly_optional() -> pd.DataFrame | None:
+    """Borzo monthly data — not yet integrated in this repo."""
+    return None
+
+
+def require_borzo_clients() -> pd.DataFrame:
+    """Borzo client-level data — not yet integrated in this repo."""
+    return pd.DataFrame()
+
+
+def blitz_delivery_monthly(df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate Delivery to monthly Group-Overview format.
+    Output columns: Year, Month, Stream, Revenue, Cost, GP, Volume.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+    monthly = (df.groupby(['Year', 'Month'], observed=True)
+               .agg(Revenue=('Total Revenue', 'sum'),
+                    Cost=('Total Cost', 'sum'),
+                    GP=('GP', 'sum'),
+                    Volume=('Delivery Volume', 'sum'))
+               .reset_index())
+    monthly['Stream'] = 'Blitz — Delivery'
+    return monthly[['Year', 'Month', 'Stream', 'Revenue', 'Cost', 'GP', 'Volume']]
+
+
+def blitz_mobile_monthly(df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate Mobile Sellers to monthly Group-Overview format.
+    Output columns: Year, Month, Stream, Revenue, Cost, GP, Volume.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+    monthly = (df.groupby(['Year', 'Month'], observed=True)
+               .agg(Revenue=('Gross Revenue', 'sum'),
+                    GP=('Profit Calc', 'sum'),
+                    Volume=('Total Cups Sold', 'sum'))
+               .reset_index())
+    monthly['Cost'] = monthly['Revenue'] - monthly['GP']
+    monthly['Stream'] = 'Blitz — Mobile Sellers'
+    return monthly[['Year', 'Month', 'Stream', 'Revenue', 'Cost', 'GP', 'Volume']]
+
+
+def borzo_monthly_std(df: pd.DataFrame) -> pd.DataFrame:
+    """Borzo monthly normalization — pass-through stub (no Borzo data yet)."""
+    if df is None or (hasattr(df, 'empty') and df.empty):
+        return pd.DataFrame()
+    return df.copy()
+
