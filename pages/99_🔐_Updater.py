@@ -7,7 +7,12 @@ st.title("🔐 Admin — Update Dashboard Data")
 st.caption("Upload and commit new data files to GitHub.")
 
 if st.secrets.get("admin_password") is None:
-    st.error("Admin password not configured in st.secrets. See SETUP.txt.")
+    st.info(
+        "**Updater is unavailable in this environment.**\n\n"
+        "Data now refreshes automatically from SharePoint — the "
+        "Updater is only kept as a fallback for admins. To enable, "
+        "add `admin_password` to Streamlit secrets."
+    )
     st.stop()
 
 pw = st.text_input("Admin password", type="password")

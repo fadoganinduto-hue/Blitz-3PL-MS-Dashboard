@@ -39,11 +39,14 @@ prev_df = filter_period(df, view_mode, prev_info[0], prev_info[1]) if prev_info 
 prev_lbl = prev_info[2] if prev_info else "—"
 
 # ── Latest period banner ───────────────────────────────────────────────────────
+is_latest = (curr_yr, curr_p) == periods[-1][:2]
+week_or_month = "Week" if view_mode == "Weekly" else "Month"
+prefix = "Latest" if is_latest else "Selected"
 if view_mode == "Weekly":
     date_lbl = curr_df['Date Range'].dropna().iloc[0] if not curr_df['Date Range'].dropna().empty else ''
-    st.subheader(f"Latest Week — {curr_lbl}  ·  {date_lbl}")
+    st.subheader(f"{prefix} {week_or_month} — {curr_lbl}  ·  {date_lbl}")
 else:
-    st.subheader(f"Latest Month — {curr_lbl}")
+    st.subheader(f"{prefix} {week_or_month} — {curr_lbl}")
 
 if prev_info:
     st.caption(f"Comparing vs {prev_lbl}")

@@ -137,10 +137,21 @@ with tab_sum:
     margin   = tot_gp / tot_rev * 100 if tot_rev else 0
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("EV Revenue",   fmt_idr(tot_rev))
+    k1.metric(
+        "EV Revenue (PV)",
+        fmt_idr(tot_rev),
+        help="Production Value: positive when EV revenue exceeds EV cost; "
+             "negative values reflect refunded/reversed EV charges."
+    )
     k2.metric("EV Cost",      fmt_idr(tot_cost))
     k3.metric("EV GP",        fmt_idr(tot_gp))
     k4.metric("GP Margin %",  fmt_pct(margin))
+
+    st.caption(
+        "ℹ️ EV PV is a net production-value metric. Negative values are "
+        "expected when refunds/reversals dominate; they reconcile to the "
+        "source file's EV Related PV column."
+    )
 
     st.divider()
 

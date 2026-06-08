@@ -59,6 +59,8 @@ st.divider()
 # ── YoY GP waterfall chart ────────────────────────────────────────────────────
 st.subheader("GP by Year")
 
+yoy = yoy.copy()
+yoy['Year'] = yoy['Year'].astype(int).astype(str)
 fig_yoy = px.bar(
     yoy, x='Year', y='GP',
     color='GP', color_continuous_scale=['red', 'yellow', 'green'],
@@ -67,6 +69,7 @@ fig_yoy = px.bar(
     labels={'GP': 'Gross Profit (IDR)'}
 )
 fig_yoy.update_coloraxes(showscale=False)
+fig_yoy.update_xaxes(type='category')
 st.plotly_chart(fig_yoy, use_container_width=True)
 
 st.divider()
@@ -86,6 +89,8 @@ team_year['GP Margin %'] = team_year.apply(
     lambda r: r['GP'] / r['Revenue'] * 100 if r['Revenue'] else 0, axis=1
 )
 
+team_year = team_year.copy()
+team_year['Year'] = team_year['Year'].astype(int).astype(str)
 fig_ty = px.bar(
     team_year, x='Year', y='GP', color='Blitz Team', barmode='group',
     color_discrete_map={'Jakarta': C_REVENUE, 'Surabaya': C_GP},
@@ -94,6 +99,7 @@ fig_ty = px.bar(
     labels={'GP': 'Gross Profit (IDR)'}
 )
 fig_ty.update_layout(hovermode='x unified', legend=dict(orientation='h', y=1.05))
+fig_ty.update_xaxes(type='category')
 st.plotly_chart(fig_ty, use_container_width=True)
 
 st.divider()
