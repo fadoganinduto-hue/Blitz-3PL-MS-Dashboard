@@ -25,7 +25,7 @@ df = df_full.copy()
 col_client, col_mode = st.columns([2, 1])
 with col_client:
     all_clients = sorted(df['Client Name'].dropna().unique())
-    sel_client = st.selectbox("Client", all_clients)
+    sel_client = st.selectbox("Client", all_clients, key="mobile_dd_client")
 
 with col_mode:
     view_mode = period_selector(page_key="mobile_deep_dive")

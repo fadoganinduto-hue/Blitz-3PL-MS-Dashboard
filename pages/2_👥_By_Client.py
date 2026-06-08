@@ -88,7 +88,7 @@ st.divider()
 
 # ── Period rankings ───────────────────────────────────────────────────────────
 st.subheader("Period Rankings (all filtered data)")
-sort_col = st.selectbox("Sort by", ['GP', 'Revenue', 'Volume', 'GP Margin %'], index=0)
+sort_col = st.selectbox("Sort by", ['GP', 'Revenue', 'Volume', 'GP Margin %'], index=0, key="client_sort")
 
 client_agg = (
     df.groupby('Client Name', observed=True)
@@ -119,7 +119,7 @@ st.divider()
 
 # ── Client drilldown ──────────────────────────────────────────────────────────
 st.subheader("Client Drilldown")
-sel_client = st.selectbox("Select a client", sorted(df['Client Name'].dropna().unique()))
+sel_client = st.selectbox("Select a client", sorted(df['Client Name'].dropna().unique()), key="client_drill")
 cdf = df[df['Client Name'] == sel_client].copy()
 
 if cdf.empty:

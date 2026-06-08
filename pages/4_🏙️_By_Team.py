@@ -81,7 +81,7 @@ st.divider()
 
 # ── Period comparison chart ───────────────────────────────────────────────────
 st.subheader("Period Comparison")
-metric_choice = st.radio("Metric", ['GP', 'Revenue', 'Cost'], horizontal=True)
+metric_choice = st.radio("Metric", ['GP', 'Revenue', 'Cost'], horizontal=True, key="team_metric")
 
 trend_t = build_trend(df, ['Blitz Team'], view_mode)
 

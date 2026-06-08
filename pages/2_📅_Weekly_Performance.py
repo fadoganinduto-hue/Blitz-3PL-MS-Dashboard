@@ -33,7 +33,7 @@ label_map = {p[2]: (p[0], p[1]) for p in periods}
 col_a, col_b = st.columns(2)
 with col_b:
     # "Current" — latest by default
-    curr_label = st.selectbox("Period B (current / later)", period_labels[::-1], index=0)
+    curr_label = st.selectbox("Period B (current / later)", period_labels[::-1], index=0, key="pp_curr")
 with col_a:
     prior_options = [lbl for lbl in period_labels[::-1] if lbl != curr_label]
     if prior_options:
@@ -43,7 +43,8 @@ with col_a:
         prior_label = st.selectbox(
             "Period A (compare / earlier)", prior_options,
             index=0,
-            help="Pick any earlier period — consecutive or year-over-year"
+            help="Pick any earlier period — consecutive or year-over-year",
+            key="pp_prior"
         )
     else:
         st.info("No earlier period available for comparison.")
@@ -245,7 +246,8 @@ with tab2:
 
     n_periods = st.slider(
         f"Show last N {'weeks' if view_mode == 'Weekly' else 'months'}",
-        min_value=4, max_value=len(periods), value=min(12, len(periods)), step=1
+        min_value=4, max_value=len(periods), value=min(12, len(periods)), step=1,
+        key="pp_n_periods"
     )
     selected_periods = periods[-n_periods:]
 
@@ -275,7 +277,8 @@ with tab2:
         top_clients = (trend_agg.groupby('Client Name')['GP'].sum().nlargest(10).index.tolist())
         sel_clients = st.multiselect(
             "Filter clients (default: top 10 by GP)",
-            sorted(trend_agg['Client Name'].unique()), default=top_clients
+            sorted(trend_agg['Client Name'].unique()), default=top_clients,
+            key="pp_clients_trend"
         )
         if sel_clients:
             trend_agg = trend_agg[trend_agg['Client Name'].isin(sel_clients)]

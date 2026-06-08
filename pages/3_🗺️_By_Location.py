@@ -119,7 +119,7 @@ st.divider()
 
 # ── Location drilldown ────────────────────────────────────────────────────────
 st.subheader("Location Drilldown")
-sel_loc = st.selectbox("Select a location", sorted(df['Client Location'].dropna().unique()))
+sel_loc = st.selectbox("Select a location", sorted(df['Client Location'].dropna().unique()), key="loc_drill")
 loc_df  = df[df['Client Location'] == sel_loc].copy()
 
 lk1, lk2, lk3, lk4 = st.columns(4)
